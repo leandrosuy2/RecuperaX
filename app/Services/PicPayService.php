@@ -211,10 +211,16 @@ class PicPayService
                 $qrcodeContent = null;
                 
                 if (is_array($qrcodeData)) {
-                    $qrcodeBase64 = $qrcodeData['base64'] 
+                    $qrcodeBase64Raw = $qrcodeData['base64'] 
                         ?? $qrcodeData['base64_image'] 
                         ?? $qrcodeData['image']
                         ?? null;
+                    // Remover prefixo data:image se existir
+                    if ($qrcodeBase64Raw && str_starts_with($qrcodeBase64Raw, 'data:image')) {
+                        $qrcodeBase64 = preg_replace('/^data:image\/[^;]+;base64,/', '', $qrcodeBase64Raw);
+                    } else {
+                        $qrcodeBase64 = $qrcodeBase64Raw;
+                    }
                     $qrcodeContent = $qrcodeData['content'] 
                         ?? $qrcodeData['url'] 
                         ?? $qrcodeData['link']
@@ -235,7 +241,8 @@ class PicPayService
                             ]);
                             
                             if ($qrcodeResponse->successful()) {
-                                $qrcodeBase64 = 'data:image/png;base64,' . base64_encode($qrcodeResponse->body());
+                                // Salvar apenas o base64 sem o prefixo data:image
+                                $qrcodeBase64 = base64_encode($qrcodeResponse->body());
                             }
                         } catch (\Exception $e) {
                             Log::warning('Erro ao gerar QR Code', ['message' => $e->getMessage()]);

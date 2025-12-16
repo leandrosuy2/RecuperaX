@@ -220,7 +220,8 @@ class PagamentoController extends Controller
                         ]);
                     
                     if ($qrcodeResponse->successful()) {
-                        $qrcodeBase64 = 'data:image/png;base64,' . base64_encode($qrcodeResponse->body());
+                        // Salvar apenas o base64 sem o prefixo data:image
+                        $qrcodeBase64 = base64_encode($qrcodeResponse->body());
                     }
                 } catch (\Exception $e) {
                     \Illuminate\Support\Facades\Log::warning('Erro ao gerar QR Code do brcode', ['message' => $e->getMessage()]);
@@ -241,6 +242,11 @@ class PagamentoController extends Controller
                 $expiresAt = \Carbon\Carbon::parse($responseData['expired_at']);
             } else {
                 $expiresAt = now()->addDays(30);
+            }
+            
+            // Remover prefixo data:image se existir antes de salvar
+            if ($qrcodeBase64 && str_starts_with($qrcodeBase64, 'data:image')) {
+                $qrcodeBase64 = preg_replace('/^data:image\/[^;]+;base64,/', '', $qrcodeBase64);
             }
             
             $pagamento->update([

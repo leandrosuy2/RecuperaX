@@ -151,11 +151,17 @@ class ConfiguracaoPagamentoController extends Controller
                 $responseData = $resultado['data'];
                 $brcode = $responseData['brcode'] ?? ($responseData['payment_link']['brcode'] ?? null);
                 
+                // Remover prefixo data:image se existir no qrcode_base64
+                $qrcodeBase64 = $resultado['qrcode_base64'];
+                if ($qrcodeBase64 && str_starts_with($qrcodeBase64, 'data:image')) {
+                    $qrcodeBase64 = preg_replace('/^data:image\/[^;]+;base64,/', '', $qrcodeBase64);
+                }
+                
                 return response()->json([
                     'success' => true,
                     'message' => 'Conexão com PicPay estabelecida com sucesso!',
                     'payment_url' => $resultado['payment_url'],
-                    'qrcode_base64' => $resultado['qrcode_base64'],
+                    'qrcode_base64' => $qrcodeBase64,
                     'brcode' => $brcode,
                     'data' => $responseData,
                 ]);

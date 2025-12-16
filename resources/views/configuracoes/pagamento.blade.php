@@ -248,7 +248,7 @@
                 ? `<div class="text-center mb-6">
                     <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">QR Code do Pagamento de Teste</h4>
                     <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 inline-block">
-                        <img src="data:image/png;base64,${data.qrcode_base64}" alt="QR Code PicPay" class="w-64 h-64 mx-auto">
+                        <img src="${data.qrcode_base64 ? (data.qrcode_base64.startsWith('data:') ? data.qrcode_base64 : 'data:image/png;base64,' + data.qrcode_base64) : ''}" alt="QR Code PicPay" class="w-64 h-64 mx-auto">
                     </div>
                 </div>`
                 : (data.payment_url || data.brcode

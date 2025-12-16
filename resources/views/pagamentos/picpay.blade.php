@@ -35,7 +35,7 @@
                             <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">Escaneie o QR Code</h4>
                             @if($pagamento->picpay_qrcode_base64)
                             <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 inline-block">
-                                <img src="data:image/png;base64,{{ $pagamento->picpay_qrcode_base64 }}" 
+                                <img src="{{ ($pagamento->picpay_qrcode_base64 && str_starts_with($pagamento->picpay_qrcode_base64, 'data:')) ? $pagamento->picpay_qrcode_base64 : 'data:image/png;base64,' . ($pagamento->picpay_qrcode_base64 ?? '') }}" 
                                      alt="QR Code PicPay" 
                                      class="w-64 h-64 mx-auto"
                                      id="qrcode-image">
@@ -130,7 +130,7 @@
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">Escaneie o QR Code</h3>
                     <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 flex items-center justify-center">
                         @if($pagamento->picpay_qrcode_base64)
-                            <img src="data:image/png;base64,{{ $pagamento->picpay_qrcode_base64 }}" 
+                            <img src="{{ ($pagamento->picpay_qrcode_base64 && str_starts_with($pagamento->picpay_qrcode_base64, 'data:')) ? $pagamento->picpay_qrcode_base64 : 'data:image/png;base64,' . ($pagamento->picpay_qrcode_base64 ?? '') }}" 
                                  alt="QR Code PicPay" 
                                  class="w-64 h-64 mx-auto"
                                  id="qrcode-img">
