@@ -17,7 +17,7 @@ class PicPayService
     {
         $this->clientId = config('services.picpay.client_id');
         $this->clientSecret = config('services.picpay.client_secret');
-        $this->apiUrl = config('services.picpay.api_url');
+        $this->apiUrl = config('services.picpay.api_url', 'https://api.picpay.com');
         $this->sandbox = config('services.picpay.sandbox', false);
     }
 
@@ -146,16 +146,25 @@ class PicPayService
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])
-                ->post("{$this->apiUrl}/ecommerce/public/payments", $payload);
+                ->post("{$this->apiUrl}/v1/payments", $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
+                // A API de Link de Pagamento retorna qrcode como objeto com content e base64
+                $qrcodeData = $data['qrcode'] ?? null;
+                $qrcodeBase64 = null;
+                if (is_array($qrcodeData) && isset($qrcodeData['base64'])) {
+                    $qrcodeBase64 = $qrcodeData['base64'];
+                } elseif (isset($data['qrcodeBase64'])) {
+                    $qrcodeBase64 = $data['qrcodeBase64'];
+                }
+                
                 return [
                     'success' => true,
                     'data' => $data,
                     'payment_url' => $data['paymentUrl'] ?? null,
-                    'qrcode' => $data['qrcode'] ?? null,
-                    'qrcode_base64' => $data['qrcodeBase64'] ?? null,
+                    'qrcode' => is_array($qrcodeData) ? ($qrcodeData['content'] ?? null) : $qrcodeData,
+                    'qrcode_base64' => $qrcodeBase64,
                 ];
             }
 
@@ -201,7 +210,7 @@ class PicPayService
         try {
             $response = $this->httpClient()
                 ->withToken($token)
-                ->get("{$this->apiUrl}/ecommerce/public/payments/{$referenceId}/status");
+                ->get("{$this->apiUrl}/v1/payments/{$referenceId}/status");
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -256,7 +265,7 @@ class PicPayService
 
             $response = $this->httpClient()
                 ->withToken($token)
-                ->post("{$this->apiUrl}/ecommerce/public/payments/{$referenceId}/cancellations", $payload);
+                ->post("{$this->apiUrl}/v1/payments/{$referenceId}/cancellations", $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
