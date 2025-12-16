@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AcordoController;
 use App\Http\Controllers\AgendamentoController;
+use App\Http\Controllers\BoletoController;
 use App\Http\Controllers\CarteiraController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\DevedorController;
@@ -108,25 +109,46 @@ Route::middleware('auth')->group(function () {
     Route::post('/devedores/{devedor}/atualizar-telefones', [DevedorController::class, 'atualizarTelefones'])->name('devedores.atualizar-telefones');
     Route::post('/devedores/{devedor}/alterar-operador', [DevedorController::class, 'alterarOperador'])->name('devedores.alterar-operador');
     Route::post('/devedores/{devedor}/alterar-consultor', [DevedorController::class, 'alterarConsultor'])->name('devedores.alterar-consultor');
+    Route::post('/devedores/{devedor}/refazer', [DevedorController::class, 'refazer'])->name('devedores.refazer');
+    Route::post('/devedores/consultar-api', [DevedorController::class, 'consultarApi'])->name('devedores.consultar-api');
+    Route::post('/devedores/importar', [DevedorController::class, 'importar'])->name('devedores.importar');
+    Route::get('/devedores/baixar-modelo', [DevedorController::class, 'baixarModelo'])->name('devedores.baixar-modelo');
+    Route::post('/devedores/excluir-todos', [DevedorController::class, 'excluirTodos'])->name('devedores.excluir-todos');
 
     // Empresas
     Route::resource('empresas', EmpresaController::class);
     Route::post('/empresas/{empresa}/alterar-status', [EmpresaController::class, 'alterarStatus'])->name('empresas.alterar-status');
     Route::post('/empresas/consultar-cnpj', [EmpresaController::class, 'consultarCnpj'])->name('empresas.consultar-cnpj');
+    Route::get('/empresas/{empresa}/contrato', [EmpresaController::class, 'gerarContrato'])->name('empresas.contrato');
+    Route::get('/empresas/{empresa}/ficha', [EmpresaController::class, 'gerarFicha'])->name('empresas.ficha');
 
-    // Títulos
-    Route::resource('titulos', TituloController::class);
-    Route::post('/titulos/{titulo}/finalizar', [TituloController::class, 'finalizar'])->name('titulos.finalizar');
-    Route::post('/titulos/{titulo}/baixar', [TituloController::class, 'baixar'])->name('titulos.baixar');
-    Route::post('/titulos/{titulo}/quitar-parcela', [TituloController::class, 'quitarParcela'])->name('titulos.quitar-parcela');
-    Route::get('/titulos/{titulo}/gerar-pdf', [TituloController::class, 'gerarPdf'])->name('titulos.gerar-pdf');
-    Route::get('/titulos/{titulo}/gerar-recibo', [TituloController::class, 'gerarRecibo'])->name('titulos.gerar-recibo');
-    Route::post('/titulos/{titulo}/anexar-comprovante', [TituloController::class, 'anexarComprovante'])->name('titulos.anexar-comprovante');
-    Route::get('/titulos/{titulo}/baixar-comprovante', [TituloController::class, 'baixarComprovante'])->name('titulos.baixar-comprovante');
-    Route::post('/titulos/{titulo}/anexar-contrato', [TituloController::class, 'anexarContrato'])->name('titulos.anexar-contrato');
-    Route::get('/titulos/{titulo}/baixar-contrato', [TituloController::class, 'baixarContrato'])->name('titulos.baixar-contrato');
-    Route::post('/titulos/{titulo}/alterar-operador', [TituloController::class, 'alterarOperador'])->name('titulos.alterar-operador');
-    Route::get('/titulos/quitados', [TituloController::class, 'quitados'])->name('titulos.quitados');
+// Boletos e Cobranças
+Route::middleware('group_required:2')->group(function () {
+    Route::get('/emitir-boletos', [BoletoController::class, 'emitir'])->name('emitir-boletos');
+    Route::post('/emitir-boletos', [BoletoController::class, 'processarEmissao'])->name('processar-emissao-boleto');
+    Route::get('/emitir-boletos/detalhes-empresa/{empresaId}', [BoletoController::class, 'detalhesEmpresa'])->name('detalhes-empresa');
+    Route::post('/gerar-cobranca', [BoletoController::class, 'gerarCobranca'])->name('gerar-cobranca');
+    Route::post('/boletos/{boleto}/enviar-whatsapp', [BoletoController::class, 'enviarWhatsapp'])->name('enviar-whatsapp');
+    Route::post('/consultar-api', [BoletoController::class, 'consultarApi'])->name('consultar-api');
+});
+
+// Títulos
+// Rota específica deve vir ANTES da rota resource para evitar conflito
+Route::middleware('group_required:2')->group(function () {
+    Route::get('/titulos/quitados', [TituloController::class, 'quitados_listar'])->name('titulos.quitados');
+});
+
+Route::resource('titulos', TituloController::class);
+Route::post('/titulos/{titulo}/finalizar', [TituloController::class, 'finalizar'])->name('titulos.finalizar');
+Route::post('/titulos/{titulo}/baixar', [TituloController::class, 'baixar'])->name('titulos.baixar');
+Route::post('/titulos/{titulo}/quitar-parcela', [TituloController::class, 'quitarParcela'])->name('titulos.quitar-parcela');
+Route::get('/titulos/{titulo}/gerar-pdf', [TituloController::class, 'gerarPdf'])->name('titulos.gerar-pdf');
+Route::get('/titulos/{titulo}/gerar-recibo', [TituloController::class, 'gerarRecibo'])->name('titulos.gerar-recibo');
+Route::post('/titulos/{titulo}/anexar-comprovante', [TituloController::class, 'anexarComprovante'])->name('titulos.anexar-comprovante');
+Route::get('/titulos/{titulo}/baixar-comprovante', [TituloController::class, 'baixarComprovante'])->name('titulos.baixar-comprovante');
+Route::post('/titulos/{titulo}/anexar-contrato', [TituloController::class, 'anexarContrato'])->name('titulos.anexar-contrato');
+Route::get('/titulos/{titulo}/baixar-contrato', [TituloController::class, 'baixarContrato'])->name('titulos.baixar-contrato');
+Route::post('/titulos/{titulo}/alterar-operador', [TituloController::class, 'alterarOperador'])->name('titulos.alterar-operador');
 
     // Parcelamentos
     Route::resource('parcelamentos', ParcelamentoController::class)->only(['index', 'show']);
@@ -156,4 +178,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/logs', [\App\Http\Controllers\UserAccessLogController::class, 'index'])->name('logs.index');
     Route::get('/logs/exportar-csv', [\App\Http\Controllers\UserAccessLogController::class, 'exportarCsv'])->name('logs.exportar-csv');
     Route::get('/logs/exportar-excel', [\App\Http\Controllers\UserAccessLogController::class, 'exportarExcel'])->name('logs.exportar-excel');
+
+    // WhatsApp
+    Route::resource('mensagens-whatsapp', \App\Http\Controllers\MensagemWhatsappController::class);
+    Route::resource('whatsapp-templates', \App\Http\Controllers\WhatsappTemplateController::class)->parameters([
+        'whatsapp-templates' => 'template'
+    ]);
+    Route::get('/whatsapp/conectar-pendentes', [\App\Http\Controllers\WhatsappController::class, 'conectarPendentes'])->name('whatsapp.conectar-pendentes');
+    Route::get('/whatsapp/conectar-negociados', [\App\Http\Controllers\WhatsappController::class, 'conectarNegociados'])->name('whatsapp.conectar-negociados');
+    Route::post('/whatsapp/enviar-mensagem', [\App\Http\Controllers\WhatsappController::class, 'enviarMensagem'])->name('whatsapp.enviar-mensagem');
+    Route::post('/whatsapp/verificar-conexao', [\App\Http\Controllers\WhatsappController::class, 'verificarConexao'])->name('whatsapp.verificar-conexao');
 });

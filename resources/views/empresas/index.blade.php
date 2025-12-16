@@ -61,13 +61,24 @@
                             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden md:table-cell">{{ $empresa->nome_fantasia ?? '-' }}</td>
                             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden lg:table-cell">{{ $empresa->cnpj ?? '-' }}</td>
                             <td class="px-4 py-3 text-sm">
-                                <span class="px-2 py-1 text-xs rounded-full {{ $empresa->status_empresa ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' }}">
+                                <button type="button"
+                                        onclick="toggleStatus({{ $empresa->id }}, {{ $empresa->status_empresa ? 'true' : 'false' }})"
+                                        class="px-2 py-1 text-xs rounded-full transition-colors {{ $empresa->status_empresa ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800' : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800' }}"
+                                        title="Clique para {{ $empresa->status_empresa ? 'desativar' : 'ativar' }} empresa">
                                     {{ $empresa->status_empresa ? 'Ativo' : 'Inativo' }}
-                                </span>
+                                </button>
                             </td>
                             <td class="px-4 py-3 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <a href="{{ route('empresas.show', $empresa) }}" 
+                                    <a href="{{ route('empresas.contrato', $empresa) }}"
+                                       target="_blank"
+                                       class="p-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900 rounded-lg transition-colors"
+                                       title="Gerar Contrato">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                    </a>
+                                    <a href="{{ route('empresas.show', $empresa) }}"
                                        class="p-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900 rounded-lg transition-colors"
                                        title="Ver detalhes">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,7 +86,7 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                         </svg>
                                     </a>
-                                    <a href="{{ route('empresas.edit', $empresa) }}" 
+                                    <a href="{{ route('empresas.edit', $empresa) }}"
                                        class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                        title="Editar">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,5 +112,55 @@
             </div>
             @endif
         </div>
+
+        <!-- JavaScript para toggle de status -->
+        <script>
+            function toggleStatus(empresaId, currentStatus) {
+                const button = event.target;
+                const originalText = button.textContent;
+                const originalClasses = button.className;
+
+                // Desabilitar botão durante a requisição
+                button.disabled = true;
+                button.textContent = 'Alterando...';
+
+                fetch(`/empresas/${empresaId}/alterar-status`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Atualizar aparência do botão
+                        const newStatus = data.status_empresa;
+                        button.textContent = newStatus ? 'Ativo' : 'Inativo';
+                        button.className = `px-2 py-1 text-xs rounded-full transition-colors ${newStatus ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800' : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800'}`;
+                        button.setAttribute('onclick', `toggleStatus(${empresaId}, ${newStatus})`);
+                        button.setAttribute('title', `Clique para ${newStatus ? 'desativar' : 'ativar'} empresa`);
+
+                        // Mostrar toast de sucesso
+                        if (window.toast) {
+                            window.toast.success(data.message);
+                        }
+                    } else {
+                        throw new Error('Erro na resposta');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    // Restaurar estado original
+                    button.disabled = false;
+                    button.textContent = originalText;
+                    button.className = originalClasses;
+
+                    if (window.toast) {
+                        window.toast.error('Erro ao alterar status da empresa');
+                    }
+                });
+            }
+        </script>
     </div>
 </x-app-layout>

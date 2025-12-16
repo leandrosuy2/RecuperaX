@@ -338,32 +338,146 @@ class TituloController extends Controller
             ->with('success', 'Operador alterado com sucesso!');
     }
 
-    public function quitados(Request $request)
+    public function quitados_listar(Request $request)
     {
-        $query = Titulo::where('statusBaixa', 2)
-            ->with(['devedor', 'empresa']);
+        $user = $request->user();
+        $is_admin = $user && ($user->is_staff || $user->is_superuser);
+        $user_name = $user ? ($user->name ?: $user->username) : '';
 
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('num_titulo', 'like', "%{$search}%")
-                  ->orWhereHas('devedor', function($q) use ($search) {
-                      $q->where('nome', 'like', "%{$search}%")
-                        ->orWhere('razao_social', 'like', "%{$search}%");
-                  });
+        // Usar Eloquent com query builder para melhor performance
+        $query = DB::table('titulo as t')
+            ->join('devedores as d', 'd.id', '=', 't.devedor_id')
+            ->join('core_empresa as e', 'e.id', '=', 'd.empresa_id')
+            ->select([
+                't.data_baixa',
+                't.dataVencimento',
+                't.valorRecebido',
+                'd.nome',
+                'd.cpf',
+                'd.cnpj',
+                'e.nome_fantasia',
+                't.idTituloRef',
+                'e.operador',
+                'e.supervisor'
+            ])
+            ->whereNotNull('t.data_baixa')
+            ->whereNotNull('t.valorRecebido')
+            ->where('e.status_empresa', 1);
+
+        // Aplicar filtros de operador/supervisor para usuários não-admin
+        if (!$is_admin && $user_name) {
+            $query->where(function($q) use ($user_name) {
+                $q->whereRaw('LOWER(e.operador) = LOWER(?)', [$user_name])
+                  ->orWhereRaw('LOWER(COALESCE(e.supervisor, \'\')) = LOWER(?)', [$user_name]);
             });
         }
 
+        // Filtro de período
         if ($request->filled('data_inicio')) {
-            $query->whereDate('data_baixa', '>=', $request->data_inicio);
+            $query->where('t.data_baixa', '>=', $request->data_inicio);
         }
 
         if ($request->filled('data_fim')) {
-            $query->whereDate('data_baixa', '<=', $request->data_fim);
+            $query->where('t.data_baixa', '<=', $request->data_fim);
         }
 
-        $titulos = $query->latest('data_baixa')->paginate(20);
+        // Filtro de tipo (parcela vs quitação)
+        if ($request->filled('tipo')) {
+            if ($request->tipo === 'parcela') {
+                $query->whereNotNull('t.idTituloRef');
+            } elseif ($request->tipo === 'quitacao') {
+                $query->whereNull('t.idTituloRef');
+            }
+        }
 
-        return view('titulos.quitados', compact('titulos'));
+        // Filtros de texto
+        if ($request->filled('devedor')) {
+            $query->whereRaw('LOWER(d.nome) LIKE LOWER(?)', ['%' . $request->devedor . '%']);
+        }
+
+        if ($request->filled('empresa')) {
+            $query->whereRaw('LOWER(e.nome_fantasia) LIKE LOWER(?)', ['%' . $request->empresa . '%']);
+        }
+
+        // Filtros de valor
+        if ($request->filled('valor_min')) {
+            $valor_min = str_replace(',', '.', $request->valor_min);
+            if (is_numeric($valor_min)) {
+                $query->where('t.valorRecebido', '>=', $valor_min);
+            }
+        }
+
+        if ($request->filled('valor_max')) {
+            $valor_max = str_replace(',', '.', $request->valor_max);
+            if (is_numeric($valor_max)) {
+                $query->where('t.valorRecebido', '<=', $valor_max);
+            }
+        }
+
+        // Filtros de operador/supervisor (apenas admin)
+        if ($is_admin && $request->filled('operador')) {
+            $query->whereRaw('LOWER(e.operador) = LOWER(?)', [$request->operador]);
+        }
+
+        if ($is_admin && $request->filled('supervisor')) {
+            $query->whereRaw('LOWER(e.supervisor) = LOWER(?)', [$request->supervisor]);
+        }
+
+        // Executar query com paginação
+        $paginator = $query->orderBy('t.data_baixa', 'desc')
+                           ->orderBy('t.id', 'desc')
+                           ->paginate(50);
+
+        // Mapear dados para o formato esperado pela view
+        $paginator->getCollection()->transform(function ($item) {
+            return [
+                'data_baixa' => $item->data_baixa ? date('d/m/Y', strtotime($item->data_baixa)) : '',
+                'data_vencimento' => $item->dataVencimento ? date('d/m/Y', strtotime($item->dataVencimento)) : '',
+                'valor_recebido' => $item->valorRecebido ? floatval($item->valorRecebido) : 0.0,
+                'nome' => $item->nome ?: '',
+                'cpf' => $item->cpf ?: '',
+                'cnpj' => $item->cnpj ?: '',
+                'empresa' => $item->nome_fantasia ?: '',
+                'idTituloRef' => $item->idTituloRef,
+                'operador' => $item->operador ?: '',
+                'supervisor' => $item->supervisor ?: '',
+            ];
+        });
+
+        // Calcular soma total de todos os registros (não apenas da página atual)
+        $soma_total_query = clone $query;
+        $soma_total = $soma_total_query->sum('t.valorRecebido');
+
+        // Carregar listas para filtros (apenas admin)
+        $operadores = [];
+        $supervisores = [];
+        if ($is_admin) {
+            $operadores = DB::select("
+                SELECT DISTINCT e.operador
+                FROM core_empresa e
+                WHERE e.status_empresa = 1
+                  AND e.operador IS NOT NULL
+                  AND e.operador <> ''
+                ORDER BY 1
+            ");
+
+            $supervisores = DB::select("
+                SELECT DISTINCT e.supervisor
+                FROM core_empresa e
+                WHERE e.status_empresa = 1
+                  AND e.supervisor IS NOT NULL
+                  AND e.supervisor <> ''
+                ORDER BY 1
+            ");
+        }
+
+        return view('titulos.quitados', compact(
+            'paginator',
+            'soma_total',
+            'is_admin',
+            'user_name',
+            'operadores',
+            'supervisores'
+        ));
     }
 }

@@ -4,109 +4,161 @@
         <div class="flex items-center justify-between">
             <div>
                 <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">Títulos Quitados</h1>
-                <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Lista de títulos que foram quitados</p>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Relatório de títulos quitados (baixados com pagamento)</p>
+                @if(!$is_admin)
+                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1">* Exibindo somente registros do operador/supervisor {{ $user_name }}</p>
+                @endif
             </div>
             <a href="{{ route('titulos.index') }}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300">
                 ← Voltar para Títulos
             </a>
         </div>
 
+        <!-- Soma Total -->
+        <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm opacity-90">Total Recebido</p>
+                    <p class="text-3xl font-bold">R$ {{ number_format($soma_total, 2, ',', '.') }}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm opacity-90">Registros encontrados</p>
+                    <p class="text-2xl font-bold">{{ $paginator->total() }}</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Filtros -->
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-colors">
-            <form method="GET" class="flex flex-col sm:flex-row gap-3">
-                <div class="flex-1">
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Pesquisar</label>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Nº título, devedor..." 
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <!-- Período -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Data Início</label>
+                    <input type="date" name="data_inicio" value="{{ request('data_inicio') }}"
                            class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
-                <div class="sm:w-48">
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Data Baixa Início</label>
-                    <input type="date" name="data_inicio" value="{{ request('data_inicio') }}" class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Data Fim</label>
+                    <input type="date" name="data_fim" value="{{ request('data_fim') }}"
+                           class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
-                <div class="sm:w-48">
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Data Baixa Fim</label>
-                    <input type="date" name="data_fim" value="{{ request('data_fim') }}" class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+
+                <!-- Tipo -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
+                    <select name="tipo" class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">Todos</option>
+                        <option value="parcela" {{ request('tipo') == 'parcela' ? 'selected' : '' }}>Parcela</option>
+                        <option value="quitacao" {{ request('tipo') == 'quitacao' ? 'selected' : '' }}>Quitação</option>
+                    </select>
                 </div>
-                <div class="flex items-end gap-2">
-                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Filtrar</button>
-                    @if(request()->anyFilled(['search', 'data_inicio', 'data_fim']))
-                    <a href="{{ route('titulos.quitados') }}" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm px-4 py-2 rounded-lg transition-colors">Limpar</a>
+
+                <!-- Devedor -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Devedor</label>
+                    <input type="text" name="devedor" value="{{ request('devedor') }}" placeholder="Nome do devedor"
+                           class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <!-- Empresa -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Empresa</label>
+                    <input type="text" name="empresa" value="{{ request('empresa') }}" placeholder="Nome fantasia"
+                           class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <!-- Valor Mínimo -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Valor Mínimo</label>
+                    <input type="text" name="valor_min" value="{{ request('valor_min') }}" placeholder="0,00"
+                           class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                <!-- Valor Máximo -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Valor Máximo</label>
+                    <input type="text" name="valor_max" value="{{ request('valor_max') }}" placeholder="0,00"
+                           class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+
+                @if($is_admin)
+                <!-- Operador (apenas admin) -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Operador</label>
+                    <select name="operador" class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">Todos</option>
+                        @foreach($operadores as $op)
+                        <option value="{{ $op->operador }}" {{ request('operador') == $op->operador ? 'selected' : '' }}>{{ $op->operador }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Supervisor (apenas admin) -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Supervisor</label>
+                    <select name="supervisor" class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">Todos</option>
+                        @foreach($supervisores as $sup)
+                        <option value="{{ $sup->supervisor }}" {{ request('supervisor') == $sup->supervisor ? 'selected' : '' }}>{{ $sup->supervisor }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @endif
+
+                <!-- Botões -->
+                <div class="flex items-end gap-2 md:col-span-2 lg:col-span-3 xl:col-span-4">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                        Filtrar
+                    </button>
+                    @if(request()->anyFilled(['data_inicio', 'data_fim', 'tipo', 'devedor', 'empresa', 'valor_min', 'valor_max', 'operador', 'supervisor']))
+                    <a href="{{ route('titulos.quitados') }}" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm px-4 py-2 rounded-lg transition-colors">
+                        Limpar
+                    </a>
                     @endif
                 </div>
             </form>
         </div>
 
-        <!-- Resumo -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Total Quitado</p>
-                <p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2">
-                    R$ {{ number_format($titulos->sum('valorRecebido') ?? $titulos->sum('valor'), 2, ',', '.') }}
-                </p>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Quantidade</p>
-                <p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2">{{ $titulos->count() }}</p>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Média por Título</p>
-                <p class="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-2">
-                    R$ {{ number_format($titulos->count() > 0 ? ($titulos->sum('valorRecebido') ?? $titulos->sum('valor')) / $titulos->count() : 0, 2, ',', '.') }}
-                </p>
-            </div>
-        </div>
-
         <!-- Tabela -->
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
-            <div class="overflow-x-auto">
+            <!-- Desktop Table -->
+            <div class="hidden md:block overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead class="bg-gray-50 dark:bg-gray-700">
                         <tr>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nº Título</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Devedor</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">Empresa</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Vencimento</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Valor Original</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Valor Recebido</th>
-                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Data Baixa</th>
-                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Ações</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Tipo</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Data Baixa</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Data Vencimento</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Valor Recebido</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Devedor</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">CPF/CNPJ</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Empresa</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Operador</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Supervisor</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        @forelse($titulos as $titulo)
+                        @forelse($paginator->items() as $item)
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{{ $titulo->num_titulo ?? '-' }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $titulo->devedor ? $titulo->devedor->nome_completo : '-' }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden md:table-cell">
-                                {{ $titulo->empresa ? ($titulo->empresa->nome_fantasia ?? $titulo->empresa->razao_social) : '-' }}
+                            <td class="px-4 py-3 text-sm">
+                                @if($item['idTituloRef'])
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Parcela</span>
+                                @else
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Quitação</span>
+                                @endif
                             </td>
-                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $titulo->dataVencimento ? $titulo->dataVencimento->format('d/m/Y') : '-' }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">R$ {{ number_format($titulo->valor, 2, ',', '.') }}</td>
-                            <td class="px-4 py-3 text-sm font-semibold text-green-600 dark:text-green-400">R$ {{ number_format($titulo->valorRecebido ?? $titulo->valor, 2, ',', '.') }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $titulo->data_baixa ? $titulo->data_baixa->format('d/m/Y') : '-' }}</td>
-                            <td class="px-4 py-3 text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <a href="{{ route('titulos.show', $titulo) }}" 
-                                       class="p-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900 rounded-lg transition-colors"
-                                       title="Ver detalhes">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                        </svg>
-                                    </a>
-                                    <a href="{{ route('titulos.gerar-recibo', $titulo) }}" 
-                                       class="p-2 text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900 rounded-lg transition-colors"
-                                       title="Gerar recibo">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                        </svg>
-                                    </a>
-                                </div>
-                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $item['data_baixa'] }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $item['data_vencimento'] }}</td>
+                            <td class="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">R$ {{ number_format($item['valor_recebido'], 2, ',', '.') }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $item['nome'] }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $item['cpf'] ?: $item['cnpj'] }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $item['empresa'] }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $item['operador'] }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{{ $item['supervisor'] }}</td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                            <td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                 Nenhum título quitado encontrado
                             </td>
                         </tr>
@@ -114,11 +166,78 @@
                     </tbody>
                 </table>
             </div>
-            @if($titulos->hasPages())
-            <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-                {{ $titulos->links() }}
+
+            <!-- Mobile Cards -->
+            <div class="md:hidden">
+                @forelse($paginator->items() as $item)
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            @if($item['idTituloRef'])
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Parcela</span>
+                            @else
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Quitação</span>
+                            @endif
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-gray-100" data-label="Valor Recebido">
+                                R$ {{ number_format($item['valor_recebido'], 2, ',', '.') }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400" data-label="Data Baixa">Data Baixa:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ $item['data_baixa'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400" data-label="Data Vencimento">Data Vencimento:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ $item['data_vencimento'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400" data-label="Devedor">Devedor:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ $item['nome'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400" data-label="CPF/CNPJ">CPF/CNPJ:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ $item['cpf'] ?: $item['cnpj'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400" data-label="Empresa">Empresa:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ $item['empresa'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400" data-label="Operador">Operador:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ $item['operador'] }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400" data-label="Supervisor">Supervisor:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ $item['supervisor'] }}</span>
+                        </div>
+                    </div>
+                </div>
+                @empty
+                <div class="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    Nenhum título quitado encontrado
+                </div>
+                @endforelse
+            </div>
+
+            <!-- Paginação -->
+            @if($paginator->hasPages())
+            <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                {{ $paginator->appends(request()->query())->links() }}
             </div>
             @endif
         </div>
     </div>
+
+    <style>
+        @media (max-width: 767px) {
+            .md\:hidden th {
+                display: none;
+            }
+        }
+    </style>
 </x-app-layout>

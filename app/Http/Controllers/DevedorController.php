@@ -14,35 +14,208 @@ class DevedorController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Devedor::with(['empresa']);
+        // Query complexa para calcular status baseado nos títulos
+        $query = DB::table('devedores as d')
+            ->join('core_empresa as e', 'd.empresa_id', '=', 'e.id')
+            ->leftJoin('titulo as t', 'd.id', '=', 't.devedor_id')
+            ->select([
+                'd.id',
+                'd.nome',
+                'd.cpf',
+                'd.cnpj',
+                'd.razao_social',
+                'd.nome_fantasia',
+                'd.tipo_pessoa',
+                'd.telefone',
+                'd.created_at',
+                'e.nome_fantasia as empresa_nome',
+                'e.id as empresa_id',
+                DB::raw('COUNT(DISTINCT t.id) as qtd_titulos'),
+                DB::raw('MIN(t.id) as titulo_id_exemplo'),
+                DB::raw('CASE
+                    WHEN MAX(CASE WHEN (t.statusBaixa=3 OR t.statusBaixaGeral=3) THEN 1 ELSE 0 END) = 1 THEN 3
+                    WHEN MAX(CASE WHEN (t.statusBaixa=2 OR t.statusBaixaGeral=2) THEN 1 ELSE 0 END) = 1 THEN 2
+                    ELSE 0
+                END AS status_baixa_num')
+            ])
+            ->where('e.status_empresa', 1) // Apenas empresas ativadas
+            ->groupBy('d.id', 'd.nome', 'd.cpf', 'd.cnpj', 'd.razao_social', 'd.nome_fantasia', 'd.tipo_pessoa', 'd.telefone', 'd.created_at', 'e.nome_fantasia', 'e.id')
+            ->havingRaw('COUNT(DISTINCT t.id) > 0'); // Apenas devedores com títulos
 
         // Filtros
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
-                $q->where('nome', 'like', "%{$search}%")
-                  ->orWhere('razao_social', 'like', "%{$search}%")
-                  ->orWhere('cpf', 'like', "%{$search}%")
-                  ->orWhere('cnpj', 'like', "%{$search}%");
+                $q->where('d.nome', 'like', "%{$search}%")
+                  ->orWhere('d.razao_social', 'like', "%{$search}%")
+                  ->orWhere('d.nome_fantasia', 'like', "%{$search}%")
+                  ->orWhere('d.cpf', 'like', "%{$search}%")
+                  ->orWhere('d.cnpj', 'like', "%{$search}%")
+                  ->orWhere('d.telefone', 'like', "%{$search}%")
+                  ->orWhere('e.nome_fantasia', 'like', "%{$search}%");
             });
         }
 
         if ($request->filled('empresa_id')) {
-            $query->where('empresa_id', $request->empresa_id);
+            $query->where('d.empresa_id', $request->empresa_id);
         }
 
         if ($request->filled('tipo_pessoa')) {
-            $query->where('tipo_pessoa', $request->tipo_pessoa);
+            $query->where('d.tipo_pessoa', $request->tipo_pessoa);
         }
 
-        if ($request->filled('status_code')) {
-            $query->where('status_code', $request->status_code);
+        if ($request->filled('status')) {
+            $statusMap = [
+                'pendente' => 0,
+                'quitado' => 2,
+                'negociado' => 3
+            ];
+
+            if (isset($statusMap[$request->status])) {
+                $statusNum = $statusMap[$request->status];
+                if ($statusNum == 0) {
+                    $query->havingRaw('CASE
+                        WHEN MAX(CASE WHEN (t.statusBaixa=3 OR t.statusBaixaGeral=3) THEN 1 ELSE 0 END) = 1 THEN 3
+                        WHEN MAX(CASE WHEN (t.statusBaixa=2 OR t.statusBaixaGeral=2) THEN 1 ELSE 0 END) = 1 THEN 2
+                        ELSE 0
+                    END = 0');
+                } elseif ($statusNum == 2) {
+                    $query->havingRaw('CASE
+                        WHEN MAX(CASE WHEN (t.statusBaixa=3 OR t.statusBaixaGeral=3) THEN 1 ELSE 0 END) = 1 THEN 3
+                        WHEN MAX(CASE WHEN (t.statusBaixa=2 OR t.statusBaixaGeral=2) THEN 1 ELSE 0 END) = 1 THEN 2
+                        ELSE 0
+                    END = 2');
+                } elseif ($statusNum == 3) {
+                    $query->havingRaw('CASE
+                        WHEN MAX(CASE WHEN (t.statusBaixa=3 OR t.statusBaixaGeral=3) THEN 1 ELSE 0 END) = 1 THEN 3
+                        WHEN MAX(CASE WHEN (t.statusBaixa=2 OR t.statusBaixaGeral=2) THEN 1 ELSE 0 END) = 1 THEN 2
+                        ELSE 0
+                    END = 3');
+                }
+            }
         }
 
-        $devedores = $query->latest('created_at')->paginate(20);
+        // Paginação
+        $devedores = $query->orderBy('d.id', 'desc')->paginate(10);
+
+        // Calcular totais corretos baseado no status dos títulos
+        // Primeiro, vamos criar as queries base com os filtros aplicados
+        $baseQueryNegociado = DB::table('devedores as d')
+            ->join('core_empresa as e', 'd.empresa_id', '=', 'e.id')
+            ->where('e.status_empresa', 1);
+
+        $baseQueryQuitado = DB::table('devedores as d')
+            ->join('core_empresa as e', 'd.empresa_id', '=', 'e.id')
+            ->where('e.status_empresa', 1);
+
+        $baseQueryPendente = DB::table('devedores as d')
+            ->join('core_empresa as e', 'd.empresa_id', '=', 'e.id')
+            ->where('e.status_empresa', 1);
+
+        // Aplicar os mesmos filtros da query principal
+        if ($request->filled('empresa_id')) {
+            $baseQueryNegociado->where('d.empresa_id', $request->empresa_id);
+            $baseQueryQuitado->where('d.empresa_id', $request->empresa_id);
+            $baseQueryPendente->where('d.empresa_id', $request->empresa_id);
+        }
+
+        if ($request->filled('tipo_pessoa')) {
+            $baseQueryNegociado->where('d.tipo_pessoa', $request->tipo_pessoa);
+            $baseQueryQuitado->where('d.tipo_pessoa', $request->tipo_pessoa);
+            $baseQueryPendente->where('d.tipo_pessoa', $request->tipo_pessoa);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $baseQueryNegociado->where(function($q) use ($search) {
+                $q->where('d.nome', 'like', "%{$search}%")
+                  ->orWhere('d.razao_social', 'like', "%{$search}%")
+                  ->orWhere('d.nome_fantasia', 'like', "%{$search}%")
+                  ->orWhere('d.cpf', 'like', "%{$search}%")
+                  ->orWhere('d.cnpj', 'like', "%{$search}%")
+                  ->orWhere('d.telefone', 'like', "%{$search}%")
+                  ->orWhere('e.nome_fantasia', 'like', "%{$search}%");
+            });
+            $baseQueryQuitado->where(function($q) use ($search) {
+                $q->where('d.nome', 'like', "%{$search}%")
+                  ->orWhere('d.razao_social', 'like', "%{$search}%")
+                  ->orWhere('d.nome_fantasia', 'like', "%{$search}%")
+                  ->orWhere('d.cpf', 'like', "%{$search}%")
+                  ->orWhere('d.cnpj', 'like', "%{$search}%")
+                  ->orWhere('d.telefone', 'like', "%{$search}%")
+                  ->orWhere('e.nome_fantasia', 'like', "%{$search}%");
+            });
+            $baseQueryPendente->where(function($q) use ($search) {
+                $q->where('d.nome', 'like', "%{$search}%")
+                  ->orWhere('d.razao_social', 'like', "%{$search}%")
+                  ->orWhere('d.nome_fantasia', 'like', "%{$search}%")
+                  ->orWhere('d.cpf', 'like', "%{$search}%")
+                  ->orWhere('d.cnpj', 'like', "%{$search}%")
+                  ->orWhere('d.telefone', 'like', "%{$search}%")
+                  ->orWhere('e.nome_fantasia', 'like', "%{$search}%");
+            });
+        }
+
+        // Agora calcular os totais com as condições específicas de status
+        $totaisNegociado = (clone $baseQueryNegociado)
+            ->whereExists(function($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('titulo as t')
+                    ->whereRaw('t.devedor_id = d.id')
+                    ->where('t.statusBaixa', 3);
+            })
+            ->distinct('d.id')
+            ->count('d.id');
+
+        $totaisQuitado = (clone $baseQueryQuitado)
+            ->whereExists(function($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('titulo as t')
+                    ->whereRaw('t.devedor_id = d.id')
+                    ->where('t.statusBaixa', 2);
+            })
+            ->whereNotExists(function($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('titulo as t')
+                    ->whereRaw('t.devedor_id = d.id')
+                    ->where('t.statusBaixa', 3);
+            })
+            ->distinct('d.id')
+            ->count('d.id');
+
+        $totaisPendente = (clone $baseQueryPendente)
+            ->whereNotExists(function($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('titulo as t')
+                    ->whereRaw('t.devedor_id = d.id')
+                    ->whereIn('t.statusBaixa', [2, 3]);
+            })
+            ->whereExists(function($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('titulo as t')
+                    ->whereRaw('t.devedor_id = d.id');
+            })
+            ->distinct('d.id')
+            ->count('d.id');
+
+        $totalGeral = $totaisNegociado + $totaisQuitado + $totaisPendente;
+
+        $totais = collect([
+            (object)['status_txt' => 'pendente', 'qtd' => $totaisPendente],
+            (object)['status_txt' => 'negociado', 'qtd' => $totaisNegociado],
+            (object)['status_txt' => 'quitado', 'qtd' => $totaisQuitado]
+        ]);
+
+        $totaisFormatados = [
+            'pendente' => $totais->where('status_txt', 'pendente')->first()->qtd ?? 0,
+            'negociado' => $totais->where('status_txt', 'negociado')->first()->qtd ?? 0,
+            'quitado' => $totais->where('status_txt', 'quitado')->first()->qtd ?? 0,
+            'total' => $totalGeral
+        ];
+
         $empresas = Empresa::where('status_empresa', true)->get();
 
-        return view('devedores.index', compact('devedores', 'empresas'));
+        return view('devedores.index', compact('devedores', 'empresas', 'totaisFormatados'));
     }
 
     public function create()
@@ -402,5 +575,87 @@ class DevedorController extends Controller
 
         return redirect()->route('devedores.show', $devedor)
             ->with('success', 'Telefones atualizados com sucesso!');
+    }
+
+    public function refazer(Request $request, Devedor $devedor)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Buscar todos os títulos do devedor
+            $titulos = $devedor->titulos;
+
+            foreach ($titulos as $titulo) {
+                // Resetar status de baixa
+                $titulo->update([
+                    'status_baixa' => 0,
+                    'status_baixa_geral' => 0,
+                    'data_baixa' => null,
+                    'forma_pag_id' => null,
+                    'valor_recebido' => 0,
+                    'protocolo' => null,
+                    'protocolo_gerado' => null,
+                    'codigo_protocolo' => null,
+                    'comprovante' => null
+                ]);
+
+                // Excluir acordos relacionados
+                $titulo->acordos()->delete();
+
+                // Excluir parcelamentos relacionados
+                $titulo->parcelamentos()->delete();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Devedor {$devedor->nome} foi refeito para status PENDENTE"
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao refazer devedor: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function consultarApi(Request $request)
+    {
+        // Placeholder - implementar integração com API externa
+        return response()->json([
+            'success' => false,
+            'message' => 'Funcionalidade de consulta API será implementada'
+        ]);
+    }
+
+    public function importar(Request $request)
+    {
+        // Placeholder - implementar importação de Excel
+        return response()->json([
+            'success' => false,
+            'message' => 'Funcionalidade de importação será implementada'
+        ]);
+    }
+
+    public function baixarModelo(Request $request)
+    {
+        // Placeholder - implementar download de modelo Excel
+        return response()->json([
+            'success' => false,
+            'message' => 'Funcionalidade de download de modelo será implementada'
+        ]);
+    }
+
+    public function excluirTodos(Request $request)
+    {
+        // Placeholder - implementar exclusão em massa com filtros
+        return response()->json([
+            'success' => false,
+            'message' => 'Funcionalidade de exclusão em massa será implementada'
+        ]);
     }
 }

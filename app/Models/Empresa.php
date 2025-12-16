@@ -20,6 +20,8 @@ class Empresa extends Model
         'nome_contato',
         'cpf_contato',
         'banco',
+        'agencia',
+        'conta',
         'ie',
         'telefone',
         'celular',
@@ -42,6 +44,10 @@ class Empresa extends Model
         'logo',
         'nome_favorecido_pix',
         'tipo_pix',
+        'chave_pix',
+        'qtd_parcelas',
+        'desconto_total_avista',
+        'desconto_total_aprazo',
         'status_empresa',
     ];
 

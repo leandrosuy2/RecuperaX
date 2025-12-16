@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'cora' => [
+        'oauth_url' => env('CORA_OAUTH_URL', 'https://api.cora.com.br/oauth/token'),
+        'client_id' => env('CORA_CLIENT_ID'),
+        'client_secret' => env('CORA_CLIENT_SECRET'),
+        'api_base' => env('CORA_API_BASE', 'https://api.cora.com.br/v1'),
+        'scope' => env('CORA_SCOPE', 'charges.read charges.write'),
+    ],
+
 ];
