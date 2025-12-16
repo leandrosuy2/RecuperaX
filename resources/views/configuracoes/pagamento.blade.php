@@ -217,7 +217,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('✓ ' + data.message);
+                    // Exibir modal com os dados do pagamento de teste
+                    mostrarModalTeste(data);
                 } else {
                     alert('✗ ' + data.message);
                 }
@@ -229,6 +230,115 @@
             .finally(() => {
                 button.disabled = false;
                 button.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Testar Conexão';
+            });
+        }
+
+        function mostrarModalTeste(data) {
+            // Criar ou atualizar modal de teste
+            let modal = document.getElementById('modalTestePicPay');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'modalTestePicPay';
+                modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 z-50 items-center justify-center hidden';
+                document.body.appendChild(modal);
+            }
+
+            const qrcodeHtml = data.qrcode_base64 
+                ? `<div class="text-center mb-6">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">QR Code do Pagamento de Teste</h4>
+                    <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 inline-block">
+                        <img src="data:image/png;base64,${data.qrcode_base64}" alt="QR Code PicPay" class="w-64 h-64 mx-auto">
+                    </div>
+                </div>`
+                : '';
+
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+                    <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">✓ Conexão Estabelecida!</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Pagamento de teste criado com sucesso</p>
+                            </div>
+                            <button onclick="fecharModalTeste()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-6 overflow-y-auto flex-1">
+                        <div class="space-y-6">
+                            ${qrcodeHtml}
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Link de Pagamento de Teste</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="test-payment-url" value="${data.payment_url || ''}" readonly class="flex-1 text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-900">
+                                    <button onclick="copiarLinkTeste()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">Copiar</button>
+                                </div>
+                            </div>
+                            <div>
+                                <a href="${data.payment_url || '#'}" target="_blank" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                    </svg>
+                                    Abrir Link de Pagamento
+                                </a>
+                            </div>
+                            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                <p class="text-sm text-green-800 dark:text-green-200">
+                                    <strong>✓ Sucesso!</strong> A conexão com a API do PicPay está funcionando corretamente. Este é um pagamento de teste que pode ser cancelado.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                        <button onclick="fecharModalTeste()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors">
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            // Fechar ao clicar fora
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    fecharModalTeste();
+                }
+            });
+        }
+
+        function fecharModalTeste() {
+            const modal = document.getElementById('modalTestePicPay');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function copiarLinkTeste() {
+            const input = document.getElementById('test-payment-url');
+            input.select();
+            input.setSelectionRange(0, 99999);
+            
+            navigator.clipboard.writeText(input.value).then(() => {
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = 'Copiado!';
+                button.classList.add('bg-green-600');
+                button.classList.remove('bg-indigo-600');
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('bg-green-600');
+                    button.classList.add('bg-indigo-600');
+                }, 2000);
+            }).catch(() => {
+                document.execCommand('copy');
+                alert('Link copiado!');
             });
         }
     </script>

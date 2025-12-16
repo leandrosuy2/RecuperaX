@@ -146,14 +146,14 @@ class ConfiguracaoPagamentoController extends Controller
             $resultado = $picpayService->criarPagamento($dadosTeste);
 
             if ($resultado['success']) {
-                // Cancelar o pagamento de teste imediatamente
-                if (isset($resultado['data']['referenceId'])) {
-                    $picpayService->cancelarPagamento($resultado['data']['referenceId']);
-                }
-
+                // Retornar dados completos para exibir no modal
+                // Não cancelar o pagamento de teste - deixar o usuário ver o QR Code e link
                 return response()->json([
                     'success' => true,
                     'message' => 'Conexão com PicPay estabelecida com sucesso!',
+                    'payment_url' => $resultado['payment_url'],
+                    'qrcode_base64' => $resultado['qrcode_base64'],
+                    'data' => $resultado['data'],
                 ]);
             }
 
