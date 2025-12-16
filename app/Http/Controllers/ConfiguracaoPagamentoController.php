@@ -133,14 +133,13 @@ class ConfiguracaoPagamentoController extends Controller
                 'valor' => 0.01,
                 'callback_url' => route('picpay.webhook'),
                 'return_url' => url('/'),
-                'expires_at' => now()->addHours(1),
-                'buyer' => [
-                    'first_name' => 'Teste',
-                    'last_name' => 'Conexão',
-                    'document' => '00000000000',
-                    'email' => 'teste@example.com',
-                    'phone' => '11999999999',
-                ],
+                'expires_at' => now()->addDays(30)->format('Y-m-d'),
+                'charge_name' => 'Teste de Conexão PicPay',
+                'charge_description' => 'Teste de integração com API PicPay',
+                'payment_methods' => ['BRCODE', 'CREDIT_CARD'],
+                'brcode_arrangements' => ['PICPAY', 'PIX'],
+                'allow_create_pix_key' => true,
+                'card_max_installment_number' => 12,
             ];
 
             $resultado = $picpayService->criarPagamento($dadosTeste);

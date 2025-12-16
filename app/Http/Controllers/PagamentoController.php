@@ -177,35 +177,40 @@ class PagamentoController extends Controller
         $picpayService = new PicPayService();
         $cliente = $pagamento->cliente;
 
-        // Preparar dados do comprador
-        $nomeCompleto = explode(' ', $cliente->nome, 2);
-        $firstName = $nomeCompleto[0] ?? $cliente->nome;
-        $lastName = $nomeCompleto[1] ?? '';
-
+        // Preparar dados do pagamento no formato da API de Link de Pagamento
         $dadosPagamento = [
             'reference_id' => $pagamento->numero_transacao,
             'valor' => $pagamento->valor,
             'callback_url' => route('picpay.webhook'),
             'return_url' => route('pagamentos.show', $pagamento),
-            'expires_at' => now()->addHours(24),
-            'buyer' => [
-                'first_name' => $firstName,
-                'last_name' => $lastName,
-                'document' => $cliente->cpf ?? $cliente->cnpj ?? '00000000000',
-                'email' => $cliente->email ?? 'cliente@example.com',
-                'phone' => $cliente->celular ?? $cliente->telefone ?? '11999999999',
-            ],
+            'expires_at' => now()->addDays(30)->format('Y-m-d'),
+            'charge_name' => 'Pagamento - ' . ($pagamento->divida->numero_documento ?? $pagamento->numero_transacao),
+            'charge_description' => 'Pagamento de dívida via PicPay - ' . $pagamento->cliente->nome,
+            'payment_methods' => ['BRCODE', 'CREDIT_CARD'],
+            'brcode_arrangements' => ['PICPAY', 'PIX'],
+            'allow_create_pix_key' => true,
+            'card_max_installment_number' => 12,
         ];
 
         $resultado = $picpayService->criarPagamento($dadosPagamento);
 
         if ($resultado['success']) {
+            // Extrair data de expiração da resposta ou usar padrão
+            $expiresAt = null;
+            if (isset($resultado['data']['payment_link']['expired_at'])) {
+                $expiresAt = \Carbon\Carbon::parse($resultado['data']['payment_link']['expired_at']);
+            } elseif (isset($resultado['data']['expired_at'])) {
+                $expiresAt = \Carbon\Carbon::parse($resultado['data']['expired_at']);
+            } else {
+                $expiresAt = now()->addDays(30);
+            }
+            
             $pagamento->update([
                 'picpay_reference_id' => $pagamento->numero_transacao,
                 'picpay_payment_url' => $resultado['payment_url'] ?? null,
                 'picpay_qrcode_base64' => $resultado['qrcode_base64'] ?? null,
                 'picpay_response' => $resultado['data'] ?? null,
-                'picpay_expires_at' => now()->addHours(24),
+                'picpay_expires_at' => $expiresAt,
                 'forma_pagamento' => 'picpay',
             ]);
 

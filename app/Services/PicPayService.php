@@ -126,18 +126,30 @@ class PicPayService
         }
 
         try {
+            // Converter valor para centavos (a API espera valores em centavos)
+            $valorCentavos = (int) round($dados['valor'] * 100);
+            
             $payload = [
-                'referenceId' => $dados['reference_id'],
-                'callbackUrl' => $dados['callback_url'],
-                'returnUrl' => $dados['return_url'] ?? null,
-                'value' => number_format($dados['valor'], 2, '.', ''),
-                'expiresAt' => $dados['expires_at'] ?? now()->addHours(24)->toIso8601String(),
-                'buyer' => [
-                    'firstName' => $dados['buyer']['first_name'],
-                    'lastName' => $dados['buyer']['last_name'] ?? '',
-                    'document' => preg_replace('/[^0-9]/', '', $dados['buyer']['document']),
-                    'email' => $dados['buyer']['email'],
-                    'phone' => preg_replace('/[^0-9]/', '', $dados['buyer']['phone'] ?? ''),
+                'charge' => [
+                    'name' => $dados['charge_name'] ?? 'Pagamento ' . $dados['reference_id'],
+                    'description' => $dados['charge_description'] ?? 'Pagamento via PicPay',
+                    'order_number' => $dados['reference_id'],
+                    'redirect_url' => $dados['return_url'] ?? $dados['callback_url'],
+                    'payment' => [
+                        'methods' => $dados['payment_methods'] ?? ['BRCODE', 'CREDIT_CARD'],
+                        'brcode_arrangements' => $dados['brcode_arrangements'] ?? ['PICPAY', 'PIX'],
+                    ],
+                    'amounts' => [
+                        'product' => $valorCentavos,
+                        'delivery' => 0,
+                    ],
+                ],
+                'options' => [
+                    'allow_create_pix_key' => $dados['allow_create_pix_key'] ?? true,
+                    'card_max_installment_number' => $dados['card_max_installment_number'] ?? 12,
+                    'expired_at' => isset($dados['expires_at']) 
+                        ? (is_string($dados['expires_at']) ? $dados['expires_at'] : $dados['expires_at']->format('Y-m-d'))
+                        : now()->addDays(30)->format('Y-m-d'),
                 ],
             ];
 
@@ -145,25 +157,39 @@ class PicPayService
                 ->withToken($token)
                 ->withHeaders([
                     'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
                 ])
-                ->post("{$this->apiUrl}/v1/payments", $payload);
+                ->post("{$this->apiUrl}/v1/paymentlink/create", $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
-                // A API de Link de Pagamento retorna qrcode como objeto com content e base64
-                $qrcodeData = $data['qrcode'] ?? null;
+                
+                // A API retorna a estrutura de resposta do payment link
+                // Pode estar em 'payment_link' ou na raiz
+                $paymentLink = $data['payment_link'] ?? $data;
+                
+                // Extrair URL de pagamento
+                $paymentUrl = $paymentLink['url'] 
+                    ?? $paymentLink['payment_url'] 
+                    ?? $paymentLink['checkout_url'] 
+                    ?? $paymentLink['link']
+                    ?? null;
+                
+                // Extrair QR Code
+                $qrcodeData = $paymentLink['qrcode'] ?? null;
                 $qrcodeBase64 = null;
-                if (is_array($qrcodeData) && isset($qrcodeData['base64'])) {
-                    $qrcodeBase64 = $qrcodeData['base64'];
-                } elseif (isset($data['qrcodeBase64'])) {
-                    $qrcodeBase64 = $data['qrcodeBase64'];
+                $qrcodeContent = null;
+                
+                if (is_array($qrcodeData)) {
+                    $qrcodeBase64 = $qrcodeData['base64'] ?? $qrcodeData['base64_image'] ?? null;
+                    $qrcodeContent = $qrcodeData['content'] ?? $qrcodeData['url'] ?? null;
                 }
                 
                 return [
                     'success' => true,
                     'data' => $data,
-                    'payment_url' => $data['paymentUrl'] ?? null,
-                    'qrcode' => is_array($qrcodeData) ? ($qrcodeData['content'] ?? null) : $qrcodeData,
+                    'payment_url' => $paymentUrl,
+                    'qrcode' => $qrcodeContent,
                     'qrcode_base64' => $qrcodeBase64,
                 ];
             }
@@ -210,7 +236,10 @@ class PicPayService
         try {
             $response = $this->httpClient()
                 ->withToken($token)
-                ->get("{$this->apiUrl}/v1/payments/{$referenceId}/status");
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                ])
+                ->get("{$this->apiUrl}/v1/paymentlink/{$referenceId}");
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -265,7 +294,11 @@ class PicPayService
 
             $response = $this->httpClient()
                 ->withToken($token)
-                ->post("{$this->apiUrl}/v1/payments/{$referenceId}/cancellations", $payload);
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ])
+                ->post("{$this->apiUrl}/v1/paymentlink/{$referenceId}/cancel", $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
