@@ -148,12 +148,16 @@ class ConfiguracaoPagamentoController extends Controller
             if ($resultado['success']) {
                 // Retornar dados completos para exibir no modal
                 // Não cancelar o pagamento de teste - deixar o usuário ver o QR Code e link
+                $responseData = $resultado['data'];
+                $brcode = $responseData['brcode'] ?? ($responseData['payment_link']['brcode'] ?? null);
+                
                 return response()->json([
                     'success' => true,
                     'message' => 'Conexão com PicPay estabelecida com sucesso!',
                     'payment_url' => $resultado['payment_url'],
                     'qrcode_base64' => $resultado['qrcode_base64'],
-                    'data' => $resultado['data'],
+                    'brcode' => $brcode,
+                    'data' => $responseData,
                 ]);
             }
 

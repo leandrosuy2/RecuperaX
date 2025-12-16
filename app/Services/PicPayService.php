@@ -190,15 +190,22 @@ class PicPayService
                 $paymentLink = $data['payment_link'] ?? $data;
                 
                 // Extrair URL de pagamento (tentar vários campos possíveis)
-                $paymentUrl = $paymentLink['url'] 
+                // Priorizar 'link' que é o campo correto da API
+                $paymentUrl = $data['link'] 
+                    ?? $paymentLink['link'] 
+                    ?? $paymentLink['deeplink']
+                    ?? $paymentLink['url'] 
                     ?? $paymentLink['payment_url'] 
                     ?? $paymentLink['checkout_url'] 
-                    ?? $paymentLink['link']
                     ?? $data['url']
                     ?? $data['payment_url']
                     ?? null;
                 
-                // Extrair QR Code
+                // Extrair brcode (código PIX) - a API retorna o brcode, não uma imagem
+                // Priorizar campo direto da resposta
+                $brcode = $data['brcode'] ?? $paymentLink['brcode'] ?? null;
+                
+                // Extrair QR Code (se vier como imagem base64)
                 $qrcodeData = $paymentLink['qrcode'] ?? $data['qrcode'] ?? null;
                 $qrcodeBase64 = null;
                 $qrcodeContent = null;
@@ -216,12 +223,33 @@ class PicPayService
                     $qrcodeContent = $qrcodeData;
                 }
                 
+                // Se não tiver QR Code em base64, mas tiver brcode ou link, vamos gerar usando API externa
+                if (!$qrcodeBase64) {
+                    $qrcodeData = $brcode ?? $paymentUrl;
+                    if ($qrcodeData) {
+                        // Usar API pública para gerar QR Code
+                        try {
+                            $qrcodeResponse = Http::timeout(10)->get('https://api.qrserver.com/v1/create-qr-code/', [
+                                'size' => '300x300',
+                                'data' => $qrcodeData,
+                            ]);
+                            
+                            if ($qrcodeResponse->successful()) {
+                                $qrcodeBase64 = 'data:image/png;base64,' . base64_encode($qrcodeResponse->body());
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('Erro ao gerar QR Code', ['message' => $e->getMessage()]);
+                        }
+                    }
+                }
+                
                 return [
                     'success' => true,
                     'data' => $data,
                     'payment_url' => $paymentUrl,
-                    'qrcode' => $qrcodeContent,
+                    'qrcode' => $qrcodeContent ?? $brcode,
                     'qrcode_base64' => $qrcodeBase64,
+                    'brcode' => $brcode,
                 ];
             }
 

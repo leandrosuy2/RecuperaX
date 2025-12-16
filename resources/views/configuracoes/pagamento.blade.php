@@ -243,6 +243,7 @@
                 document.body.appendChild(modal);
             }
 
+            // Gerar QR Code do link ou brcode se não tiver base64
             const qrcodeHtml = data.qrcode_base64 
                 ? `<div class="text-center mb-6">
                     <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">QR Code do Pagamento de Teste</h4>
@@ -250,7 +251,14 @@
                         <img src="data:image/png;base64,${data.qrcode_base64}" alt="QR Code PicPay" class="w-64 h-64 mx-auto">
                     </div>
                 </div>`
-                : '';
+                : (data.payment_url || data.brcode
+                    ? `<div class="text-center mb-6">
+                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">QR Code do Pagamento de Teste</h4>
+                        <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 inline-block">
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data.brcode || data.payment_url)}" alt="QR Code PicPay" class="w-64 h-64 mx-auto">
+                        </div>
+                    </div>`
+                    : '');
 
             modal.innerHTML = `
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">

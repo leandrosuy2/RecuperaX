@@ -208,12 +208,34 @@ class PagamentoController extends Controller
             $responseData = $resultado['data'];
             $paymentUrl = $resultado['payment_url'];
             $qrcodeBase64 = $resultado['qrcode_base64'];
+            $brcode = $resultado['brcode'] ?? null;
+            
+            // Se não tiver QR Code base64 mas tiver brcode, gerar via API externa
+            if (!$qrcodeBase64 && $brcode) {
+                try {
+                    $qrcodeResponse = \Illuminate\Support\Facades\Http::timeout(10)
+                        ->get('https://api.qrserver.com/v1/create-qr-code/', [
+                            'size' => '300x300',
+                            'data' => $brcode,
+                        ]);
+                    
+                    if ($qrcodeResponse->successful()) {
+                        $qrcodeBase64 = 'data:image/png;base64,' . base64_encode($qrcodeResponse->body());
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Erro ao gerar QR Code do brcode', ['message' => $e->getMessage()]);
+                }
+            }
             
             // Extrair data de expiração da resposta ou usar padrão
             $expiresAt = null;
             $paymentLink = $responseData['payment_link'] ?? $responseData;
             
-            if (isset($paymentLink['expired_at'])) {
+            if (isset($responseData['expirationDate'])) {
+                $expiresAt = \Carbon\Carbon::parse($responseData['expirationDate']);
+            } elseif (isset($paymentLink['expirationDate'])) {
+                $expiresAt = \Carbon\Carbon::parse($paymentLink['expirationDate']);
+            } elseif (isset($paymentLink['expired_at'])) {
                 $expiresAt = \Carbon\Carbon::parse($paymentLink['expired_at']);
             } elseif (isset($responseData['expired_at'])) {
                 $expiresAt = \Carbon\Carbon::parse($responseData['expired_at']);
@@ -232,7 +254,8 @@ class PagamentoController extends Controller
 
             return redirect()->route('pagamentos.picpay', $pagamento)
                 ->with('success', 'Pagamento PicPay criado com sucesso!')
-                ->with('show_modal', true);
+                ->with('show_modal', true)
+                ->with('brcode', $brcode); // Passar brcode para gerar QR Code no frontend se necessário
         }
 
         return redirect()->route('pagamentos.show', $pagamento)

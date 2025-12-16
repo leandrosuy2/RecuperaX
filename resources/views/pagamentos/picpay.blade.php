@@ -31,17 +31,22 @@
                 <div class="p-6 overflow-y-auto flex-1">
                     <div class="space-y-6">
                         <!-- QR Code -->
-                        @if($pagamento->picpay_qrcode_base64)
-                        <div class="text-center">
+                        <div class="text-center" id="qrcode-container">
                             <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">Escaneie o QR Code</h4>
+                            @if($pagamento->picpay_qrcode_base64)
                             <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 inline-block">
                                 <img src="data:image/png;base64,{{ $pagamento->picpay_qrcode_base64 }}" 
                                      alt="QR Code PicPay" 
-                                     class="w-64 h-64 mx-auto">
+                                     class="w-64 h-64 mx-auto"
+                                     id="qrcode-image">
                             </div>
+                            @else
+                            <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 inline-block">
+                                <canvas id="qrcode-canvas" class="w-64 h-64 mx-auto"></canvas>
+                            </div>
+                            @endif
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">Use o app PicPay para escanear</p>
                         </div>
-                        @endif
 
                         <!-- Link de Pagamento -->
                         <div>
@@ -123,19 +128,17 @@
                 <!-- QR Code -->
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">Escaneie o QR Code</h3>
-                    @if($pagamento->picpay_qrcode_base64)
-                        <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                    <div class="bg-white dark:bg-gray-900 p-6 rounded-lg border-2 border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                        @if($pagamento->picpay_qrcode_base64)
                             <img src="data:image/png;base64,{{ $pagamento->picpay_qrcode_base64 }}" 
                                  alt="QR Code PicPay" 
                                  class="w-64 h-64 mx-auto"
                                  id="qrcode-img">
-                        </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">Use o app PicPay para escanear</p>
-                    @else
-                        <div class="bg-gray-100 dark:bg-gray-700 p-12 rounded-lg text-center">
-                            <p class="text-gray-500 dark:text-gray-400">QR Code não disponível</p>
-                        </div>
-                    @endif
+                        @else
+                            <canvas id="qrcode-main-canvas" class="w-64 h-64 mx-auto"></canvas>
+                        @endif
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">Use o app PicPay para escanear</p>
                 </div>
 
                 <!-- Informações e Ações -->
@@ -277,6 +280,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script>
         // Abrir modal automaticamente se show_modal estiver na sessão ou se houver link de pagamento
         @if(session('show_modal') || ($pagamento->picpay_payment_url && $pagamento->status === 'pendente'))
@@ -286,6 +290,95 @@
             }, 300);
         });
         @endif
+
+        // Gerar QR Code se não tiver base64
+        document.addEventListener('DOMContentLoaded', function() {
+            const qrcodeCanvas = document.getElementById('qrcode-canvas');
+            const qrcodeMainCanvas = document.getElementById('qrcode-main-canvas');
+            const qrcodeImage = document.getElementById('qrcode-image');
+            
+            // Função para gerar QR Code
+            function gerarQRCode(canvas, data) {
+                if (!data || !canvas) return;
+                
+                if (typeof QRCode !== 'undefined') {
+                    QRCode.toCanvas(canvas, data, {
+                        width: 256,
+                        margin: 2,
+                        color: {
+                            dark: '#000000',
+                            light: '#FFFFFF'
+                        }
+                    }, function (error) {
+                        if (error) {
+                            console.error('Erro ao gerar QR Code:', error);
+                            // Fallback: usar API externa
+                            canvas.parentElement.innerHTML = `
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data)}" 
+                                     alt="QR Code PicPay" 
+                                     class="w-64 h-64 mx-auto">
+                            `;
+                        }
+                    });
+                } else {
+                    // Fallback: usar API externa se QRCode não estiver disponível
+                    canvas.parentElement.innerHTML = `
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data)}" 
+                             alt="QR Code PicPay" 
+                             class="w-64 h-64 mx-auto">
+                    `;
+                }
+            }
+            
+            // Função para gerar QR Code usando API externa
+            function gerarQRCodeAPI(canvas, data) {
+                if (!data || !canvas) return;
+                
+                const qrImg = document.createElement('img');
+                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(data)}`;
+                qrImg.alt = 'QR Code PicPay';
+                qrImg.className = 'w-64 h-64 mx-auto';
+                qrImg.onload = function() {
+                    canvas.parentElement.replaceChild(qrImg, canvas);
+                };
+                qrImg.onerror = function() {
+                    // Se falhar, tentar com biblioteca QRCode
+                    if (typeof QRCode !== 'undefined') {
+                        gerarQRCode(canvas, data);
+                    } else {
+                        canvas.parentElement.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Erro ao gerar QR Code</p>';
+                    }
+                };
+            }
+            
+            // Gerar QR Code no modal se necessário
+            if (qrcodeCanvas && !qrcodeImage) {
+                @php
+                    $brcode = session('brcode') ?? ($pagamento->picpay_response['brcode'] ?? '');
+                    $paymentUrl = $pagamento->picpay_payment_url ?? '';
+                @endphp
+                const paymentUrl = '{{ $paymentUrl }}';
+                const brcode = '{{ $brcode }}';
+                const qrcodeData = brcode || paymentUrl;
+                if (qrcodeData) {
+                    gerarQRCodeAPI(qrcodeCanvas, qrcodeData);
+                }
+            }
+            
+            // Gerar QR Code na página principal se necessário
+            if (qrcodeMainCanvas && !qrcodeImage) {
+                @php
+                    $brcode = session('brcode') ?? ($pagamento->picpay_response['brcode'] ?? '');
+                    $paymentUrl = $pagamento->picpay_payment_url ?? '';
+                @endphp
+                const paymentUrl = '{{ $paymentUrl }}';
+                const brcode = '{{ $brcode }}';
+                const qrcodeData = brcode || paymentUrl;
+                if (qrcodeData) {
+                    gerarQRCodeAPI(qrcodeMainCanvas, qrcodeData);
+                }
+            }
+        });
 
         function abrirModalPicPay() {
             const modal = document.getElementById('modalPicPay');
