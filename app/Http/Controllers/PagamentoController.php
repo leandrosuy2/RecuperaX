@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Acordo;
 use App\Models\Divida;
 use App\Models\Pagamento;
+use App\Services\PicPayService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PagamentoController extends Controller
@@ -17,7 +20,7 @@ class PagamentoController extends Controller
 
     public function index(Request $request)
     {
-        $user = auth()->user();
+        $user = Auth::user();
         $query = Pagamento::with(['divida', 'acordo', 'cliente']);
 
         if ($user->isConsultor()) {
@@ -71,9 +74,10 @@ class PagamentoController extends Controller
             'acordo_id' => 'nullable|exists:acordos,id',
             'valor' => 'required|numeric|min:0.01',
             'data_pagamento' => 'required|date',
-            'forma_pagamento' => 'required|in:dinheiro,pix,boleto,transferencia,cartao_credito,cartao_debito,cheque',
+            'forma_pagamento' => 'required|in:dinheiro,pix,boleto,transferencia,cartao_credito,cartao_debito,cheque,picpay',
             'numero_parcela' => 'nullable|integer|min:1',
             'observacoes' => 'nullable|string',
+            'usar_picpay' => 'nullable|boolean',
         ]);
 
         if (!$validated['divida_id'] && !$validated['acordo_id']) {
@@ -91,7 +95,7 @@ class PagamentoController extends Controller
             $divida = Divida::findOrFail($validated['divida_id']);
         }
 
-        $user = auth()->user();
+        $user = Auth::user();
 
         // Verificar permissão
         if ($user->isConsultor() && $divida->consultor_id !== $user->id) {
@@ -121,6 +125,11 @@ class PagamentoController extends Controller
             $pagamento->save();
         }
 
+        // Se for pagamento via PicPay, criar pagamento na API
+        if ($validated['forma_pagamento'] === 'picpay' || $request->boolean('usar_picpay')) {
+            return $this->criarPagamentoPicPay($pagamento, $divida);
+        }
+
         return redirect()->route('pagamentos.show', $pagamento)
             ->with('success', 'Pagamento registrado com sucesso!');
     }
@@ -134,7 +143,7 @@ class PagamentoController extends Controller
 
     public function confirmar(Pagamento $pagamento)
     {
-        $user = auth()->user();
+        $user = Auth::user();
         
         if (!$user->canViewAllDividas() && $user->isConsultor() && $pagamento->consultor_id !== $user->id) {
             abort(403);
@@ -158,5 +167,214 @@ class PagamentoController extends Controller
 
         return redirect()->route('pagamentos.show', $pagamento)
             ->with('success', 'Pagamento cancelado com sucesso!');
+    }
+
+    /**
+     * Cria um pagamento via PicPay
+     */
+    public function criarPagamentoPicPay(Pagamento $pagamento, Divida $divida)
+    {
+        $picpayService = new PicPayService();
+        $cliente = $pagamento->cliente;
+
+        // Preparar dados do comprador
+        $nomeCompleto = explode(' ', $cliente->nome, 2);
+        $firstName = $nomeCompleto[0] ?? $cliente->nome;
+        $lastName = $nomeCompleto[1] ?? '';
+
+        $dadosPagamento = [
+            'reference_id' => $pagamento->numero_transacao,
+            'valor' => $pagamento->valor,
+            'callback_url' => route('picpay.webhook'),
+            'return_url' => route('pagamentos.show', $pagamento),
+            'expires_at' => now()->addHours(24),
+            'buyer' => [
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'document' => $cliente->cpf ?? $cliente->cnpj ?? '00000000000',
+                'email' => $cliente->email ?? 'cliente@example.com',
+                'phone' => $cliente->celular ?? $cliente->telefone ?? '11999999999',
+            ],
+        ];
+
+        $resultado = $picpayService->criarPagamento($dadosPagamento);
+
+        if ($resultado['success']) {
+            $pagamento->update([
+                'picpay_reference_id' => $pagamento->numero_transacao,
+                'picpay_payment_url' => $resultado['payment_url'] ?? null,
+                'picpay_qrcode_base64' => $resultado['qrcode_base64'] ?? null,
+                'picpay_response' => $resultado['data'] ?? null,
+                'picpay_expires_at' => now()->addHours(24),
+                'forma_pagamento' => 'picpay',
+            ]);
+
+            return redirect()->route('pagamentos.picpay', $pagamento)
+                ->with('success', 'Pagamento PicPay criado com sucesso!');
+        }
+
+        return redirect()->route('pagamentos.show', $pagamento)
+            ->with('error', 'Erro ao criar pagamento PicPay: ' . ($resultado['message'] ?? 'Erro desconhecido'));
+    }
+
+    /**
+     * Exibe página de pagamento PicPay
+     */
+    public function picpay(Pagamento $pagamento)
+    {
+        $pagamento->load(['divida', 'acordo', 'cliente']);
+
+        if (!$pagamento->isPicPay()) {
+            return redirect()->route('pagamentos.show', $pagamento)
+                ->with('error', 'Este pagamento não é via PicPay.');
+        }
+
+        return view('pagamentos.picpay', compact('pagamento'));
+    }
+
+    /**
+     * Consulta status do pagamento PicPay
+     */
+    public function consultarPicPay(Pagamento $pagamento)
+    {
+        if (!$pagamento->isPicPay()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Este pagamento não é via PicPay.',
+            ], 400);
+        }
+
+        $picpayService = new PicPayService();
+        $resultado = $picpayService->consultarPagamento($pagamento->picpay_reference_id);
+
+        if ($resultado['success']) {
+            $statusPicPay = $resultado['status'] ?? null;
+            $statusInterno = $picpayService->mapearStatus($statusPicPay);
+
+            // Atualizar status se mudou
+            if ($statusInterno !== $pagamento->status) {
+                $pagamento->status = $statusInterno;
+                $pagamento->picpay_response = $resultado['data'];
+                
+                if ($statusInterno === 'confirmado') {
+                    $pagamento->confirmar();
+                } else {
+                    $pagamento->save();
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'status' => $statusInterno,
+                'status_picpay' => $statusPicPay,
+                'data' => $resultado['data'],
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => $resultado['message'] ?? 'Erro ao consultar pagamento',
+        ], 400);
+    }
+
+    /**
+     * Cancela pagamento PicPay
+     */
+    public function cancelarPicPay(Pagamento $pagamento)
+    {
+        if (!$pagamento->isPicPay()) {
+            return redirect()->back()
+                ->with('error', 'Este pagamento não é via PicPay.');
+        }
+
+        if ($pagamento->status === 'confirmado') {
+            return redirect()->back()
+                ->with('error', 'Não é possível cancelar pagamento já confirmado.');
+        }
+
+        $picpayService = new PicPayService();
+        $resultado = $picpayService->cancelarPagamento(
+            $pagamento->picpay_reference_id,
+            $pagamento->picpay_authorization_id
+        );
+
+        if ($resultado['success']) {
+            $pagamento->status = 'cancelado';
+            $pagamento->picpay_response = array_merge(
+                $pagamento->picpay_response ?? [],
+                ['cancellation' => $resultado['data']]
+            );
+            $pagamento->save();
+
+            return redirect()->route('pagamentos.show', $pagamento)
+                ->with('success', 'Pagamento PicPay cancelado com sucesso!');
+        }
+
+        return redirect()->back()
+            ->with('error', 'Erro ao cancelar pagamento PicPay: ' . ($resultado['message'] ?? 'Erro desconhecido'));
+    }
+
+    /**
+     * Webhook do PicPay para receber notificações
+     */
+    public function webhookPicPay(Request $request)
+    {
+        try {
+            $dados = $request->all();
+            
+            Log::info('Webhook PicPay recebido', ['dados' => $dados]);
+
+            $referenceId = $dados['referenceId'] ?? null;
+            if (!$referenceId) {
+                return response()->json(['error' => 'ReferenceId não encontrado'], 400);
+            }
+
+            // Buscar pagamento pelo reference_id
+            $pagamento = Pagamento::where('picpay_reference_id', $referenceId)->first();
+
+            if (!$pagamento) {
+                Log::warning('Pagamento não encontrado para webhook PicPay', ['reference_id' => $referenceId]);
+                return response()->json(['error' => 'Pagamento não encontrado'], 404);
+            }
+
+            $picpayService = new PicPayService();
+            $resultado = $picpayService->processarNotificacao($dados);
+
+            if ($resultado['success']) {
+                $statusPicPay = $resultado['status'] ?? null;
+                $statusInterno = $picpayService->mapearStatus($statusPicPay);
+
+                // Atualizar pagamento
+                $pagamento->picpay_authorization_id = $resultado['authorization_id'] ?? $pagamento->picpay_authorization_id;
+                $pagamento->picpay_response = $resultado['data'] ?? $pagamento->picpay_response;
+                $pagamento->status = $statusInterno;
+
+                if ($statusInterno === 'confirmado') {
+                    $pagamento->confirmar();
+                } else {
+                    $pagamento->save();
+                }
+
+                Log::info('Webhook PicPay processado com sucesso', [
+                    'pagamento_id' => $pagamento->id,
+                    'status' => $statusInterno,
+                ]);
+
+                return response()->json(['success' => true], 200);
+            }
+
+            Log::error('Erro ao processar webhook PicPay', [
+                'resultado' => $resultado,
+            ]);
+
+            return response()->json(['error' => 'Erro ao processar notificação'], 400);
+        } catch (\Exception $e) {
+            Log::error('Exceção ao processar webhook PicPay', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json(['error' => 'Erro interno'], 500);
+        }
     }
 }

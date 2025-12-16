@@ -86,6 +86,17 @@ Route::middleware('auth')->group(function () {
     Route::resource('pagamentos', PagamentoController::class);
     Route::post('/pagamentos/{pagamento}/confirmar', [PagamentoController::class, 'confirmar'])->name('pagamentos.confirmar');
     Route::post('/pagamentos/{pagamento}/cancelar', [PagamentoController::class, 'cancelar'])->name('pagamentos.cancelar');
+    Route::get('/pagamentos/{pagamento}/picpay', [PagamentoController::class, 'picpay'])->name('pagamentos.picpay');
+    Route::get('/pagamentos/{pagamento}/consultar-picpay', [PagamentoController::class, 'consultarPicPay'])->name('pagamentos.consultar-picpay');
+    Route::post('/pagamentos/{pagamento}/cancelar-picpay', [PagamentoController::class, 'cancelarPicPay'])->name('pagamentos.cancelar-picpay');
+    
+    // Configurações de Pagamento
+    Route::get('/configuracoes/pagamento', [\App\Http\Controllers\ConfiguracaoPagamentoController::class, 'index'])->name('configuracoes.pagamento');
+    Route::put('/configuracoes/pagamento', [\App\Http\Controllers\ConfiguracaoPagamentoController::class, 'update'])->name('configuracoes.pagamento.update');
+    Route::post('/configuracoes/pagamento/testar', [\App\Http\Controllers\ConfiguracaoPagamentoController::class, 'testarConexao'])->name('configuracoes.pagamento.testar');
+    
+    // Webhook PicPay (sem autenticação)
+    Route::post('/picpay/webhook', [PagamentoController::class, 'webhookPicPay'])->name('picpay.webhook');
 
     // Relatórios
     Route::get('/relatorios', [RelatorioController::class, 'index'])->name('relatorios.index');

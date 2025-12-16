@@ -43,4 +43,11 @@ return [
         'scope' => env('CORA_SCOPE', 'charges.read charges.write'),
     ],
 
+    'picpay' => [
+        'client_id' => env('PICPAY_CLIENT_ID'),
+        'client_secret' => env('PICPAY_CLIENT_SECRET'),
+        'api_url' => env('PICPAY_API_URL', 'https://api.picpay.com'),
+        'sandbox' => env('PICPAY_SANDBOX', false),
+    ],
+
 ];

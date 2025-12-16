@@ -25,12 +25,20 @@ class Pagamento extends Model
         'data_vencimento_parcela',
         'observacoes',
         'comprovante',
+        'picpay_reference_id',
+        'picpay_authorization_id',
+        'picpay_payment_url',
+        'picpay_qrcode_base64',
+        'picpay_response',
+        'picpay_expires_at',
     ];
 
     protected $casts = [
         'valor' => 'decimal:2',
         'data_pagamento' => 'date',
         'data_recebimento' => 'date',
+        'picpay_response' => 'array',
+        'picpay_expires_at' => 'datetime',
     ];
 
     // Relacionamentos
@@ -97,5 +105,33 @@ class Pagamento extends Model
             ['status' => 'pendente'],
             ['status' => 'confirmado', 'valor' => $this->valor]
         );
+    }
+
+    /**
+     * Verifica se é um pagamento via PicPay
+     */
+    public function isPicPay(): bool
+    {
+        return !empty($this->picpay_reference_id);
+    }
+
+    /**
+     * Verifica se o pagamento PicPay está expirado
+     */
+    public function isPicPayExpirado(): bool
+    {
+        if (!$this->isPicPay() || !$this->picpay_expires_at) {
+            return false;
+        }
+
+        return $this->picpay_expires_at->isPast();
+    }
+
+    /**
+     * Verifica se o pagamento PicPay está pendente
+     */
+    public function isPicPayPendente(): bool
+    {
+        return $this->isPicPay() && $this->status === 'pendente' && !$this->isPicPayExpirado();
     }
 }

@@ -77,8 +77,9 @@
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento *</label>
-                        <select name="forma_pagamento" required class="w-full text-sm border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <select name="forma_pagamento" id="forma_pagamento" required class="w-full text-sm border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             <option value="pix" {{ old('forma_pagamento') == 'pix' ? 'selected' : '' }}>PIX</option>
+                            <option value="picpay" {{ old('forma_pagamento') == 'picpay' ? 'selected' : '' }}>PicPay</option>
                             <option value="boleto" {{ old('forma_pagamento') == 'boleto' ? 'selected' : '' }}>Boleto</option>
                             <option value="transferencia" {{ old('forma_pagamento') == 'transferencia' ? 'selected' : '' }}>Transferência</option>
                             <option value="dinheiro" {{ old('forma_pagamento') == 'dinheiro' ? 'selected' : '' }}>Dinheiro</option>
@@ -86,6 +87,7 @@
                             <option value="cartao_debito" {{ old('forma_pagamento') == 'cartao_debito' ? 'selected' : '' }}>Cartão de Débito</option>
                             <option value="cheque" {{ old('forma_pagamento') == 'cheque' ? 'selected' : '' }}>Cheque</option>
                         </select>
+                        <input type="hidden" name="usar_picpay" id="usar_picpay" value="0">
                     </div>
 
                     @if($acordo)
@@ -112,4 +114,15 @@
             </form>
         </div>
     </div>
+
+    <script>
+        document.getElementById('forma_pagamento').addEventListener('change', function() {
+            const usarPicPay = document.getElementById('usar_picpay');
+            if (this.value === 'picpay') {
+                usarPicPay.value = '1';
+            } else {
+                usarPicPay.value = '0';
+            }
+        });
+    </script>
 </x-app-layout>

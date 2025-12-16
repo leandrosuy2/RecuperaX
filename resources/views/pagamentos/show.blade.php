@@ -29,8 +29,21 @@
                     </div>
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Forma de Pagamento</dt>
-                        <dd class="text-sm text-gray-900">{{ ucfirst(str_replace('_', ' ', $pagamento->forma_pagamento)) }}</dd>
+                        <dd class="text-sm text-gray-900">
+                            {{ ucfirst(str_replace('_', ' ', $pagamento->forma_pagamento)) }}
+                            @if($pagamento->isPicPay())
+                                <a href="{{ route('pagamentos.picpay', $pagamento) }}" class="ml-2 text-indigo-600 hover:text-indigo-800 text-xs underline">
+                                    Ver QR Code
+                                </a>
+                            @endif
+                        </dd>
                     </div>
+                    @if($pagamento->isPicPay())
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">PicPay Reference ID</dt>
+                        <dd class="text-sm text-gray-900 font-mono">{{ $pagamento->picpay_reference_id }}</dd>
+                    </div>
+                    @endif
                     <div>
                         <dt class="text-sm font-medium text-gray-500">Status</dt>
                         <dd>
