@@ -204,27 +204,35 @@ class PagamentoController extends Controller
         $resultado = $picpayService->criarPagamento($dadosPagamento);
 
         if ($resultado['success']) {
+            // Usar dados já extraídos pelo serviço
+            $responseData = $resultado['data'];
+            $paymentUrl = $resultado['payment_url'];
+            $qrcodeBase64 = $resultado['qrcode_base64'];
+            
             // Extrair data de expiração da resposta ou usar padrão
             $expiresAt = null;
-            if (isset($resultado['data']['payment_link']['expired_at'])) {
-                $expiresAt = \Carbon\Carbon::parse($resultado['data']['payment_link']['expired_at']);
-            } elseif (isset($resultado['data']['expired_at'])) {
-                $expiresAt = \Carbon\Carbon::parse($resultado['data']['expired_at']);
+            $paymentLink = $responseData['payment_link'] ?? $responseData;
+            
+            if (isset($paymentLink['expired_at'])) {
+                $expiresAt = \Carbon\Carbon::parse($paymentLink['expired_at']);
+            } elseif (isset($responseData['expired_at'])) {
+                $expiresAt = \Carbon\Carbon::parse($responseData['expired_at']);
             } else {
                 $expiresAt = now()->addDays(30);
             }
             
             $pagamento->update([
                 'picpay_reference_id' => $pagamento->numero_transacao,
-                'picpay_payment_url' => $resultado['payment_url'] ?? null,
-                'picpay_qrcode_base64' => $resultado['qrcode_base64'] ?? null,
-                'picpay_response' => $resultado['data'] ?? null,
+                'picpay_payment_url' => $paymentUrl,
+                'picpay_qrcode_base64' => $qrcodeBase64,
+                'picpay_response' => $responseData,
                 'picpay_expires_at' => $expiresAt,
                 'forma_pagamento' => 'picpay',
             ]);
 
             return redirect()->route('pagamentos.picpay', $pagamento)
-                ->with('success', 'Pagamento PicPay criado com sucesso!');
+                ->with('success', 'Pagamento PicPay criado com sucesso!')
+                ->with('show_modal', true);
         }
 
         return redirect()->route('pagamentos.show', $pagamento)

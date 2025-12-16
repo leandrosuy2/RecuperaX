@@ -182,25 +182,38 @@ class PicPayService
             if ($response->successful()) {
                 $data = $response->json();
                 
+                // Log da resposta para debug
+                Log::info('Resposta da API PicPay', ['data' => $data]);
+                
                 // A API retorna a estrutura de resposta do payment link
                 // Pode estar em 'payment_link' ou na raiz
                 $paymentLink = $data['payment_link'] ?? $data;
                 
-                // Extrair URL de pagamento
+                // Extrair URL de pagamento (tentar vários campos possíveis)
                 $paymentUrl = $paymentLink['url'] 
                     ?? $paymentLink['payment_url'] 
                     ?? $paymentLink['checkout_url'] 
                     ?? $paymentLink['link']
+                    ?? $data['url']
+                    ?? $data['payment_url']
                     ?? null;
                 
                 // Extrair QR Code
-                $qrcodeData = $paymentLink['qrcode'] ?? null;
+                $qrcodeData = $paymentLink['qrcode'] ?? $data['qrcode'] ?? null;
                 $qrcodeBase64 = null;
                 $qrcodeContent = null;
                 
                 if (is_array($qrcodeData)) {
-                    $qrcodeBase64 = $qrcodeData['base64'] ?? $qrcodeData['base64_image'] ?? null;
-                    $qrcodeContent = $qrcodeData['content'] ?? $qrcodeData['url'] ?? null;
+                    $qrcodeBase64 = $qrcodeData['base64'] 
+                        ?? $qrcodeData['base64_image'] 
+                        ?? $qrcodeData['image']
+                        ?? null;
+                    $qrcodeContent = $qrcodeData['content'] 
+                        ?? $qrcodeData['url'] 
+                        ?? $qrcodeData['link']
+                        ?? null;
+                } elseif (is_string($qrcodeData)) {
+                    $qrcodeContent = $qrcodeData;
                 }
                 
                 return [
