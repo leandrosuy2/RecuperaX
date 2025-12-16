@@ -194,8 +194,12 @@ class PagamentoController extends Controller
             'payment_methods' => $paymentMethods,
             'brcode_arrangements' => ['PICPAY', 'PIX'],
             'allow_create_pix_key' => true,
-            'card_max_installment_number' => 12,
         ];
+        
+        // Só adicionar card_max_installment_number se CREDIT_CARD estiver nos métodos
+        if (in_array('CREDIT_CARD', $paymentMethods)) {
+            $dadosPagamento['card_max_installment_number'] = 12;
+        }
 
         $resultado = $picpayService->criarPagamento($dadosPagamento);
 

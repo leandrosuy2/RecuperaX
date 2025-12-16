@@ -140,7 +140,7 @@ class ConfiguracaoPagamentoController extends Controller
                 'payment_methods' => ['BRCODE'], // Apenas BRCODE para teste (evita erro de valor mínimo do cartão)
                 'brcode_arrangements' => ['PICPAY', 'PIX'],
                 'allow_create_pix_key' => true,
-                'card_max_installment_number' => 12,
+                // Não incluir card_max_installment_number quando não há CREDIT_CARD
             ];
 
             $resultado = $picpayService->criarPagamento($dadosTeste);

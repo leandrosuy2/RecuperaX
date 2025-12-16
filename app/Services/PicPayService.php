@@ -140,6 +140,19 @@ class PicPayService
                 ];
             }
             
+            // Montar options - card_max_installment_number só é permitido quando há CREDIT_CARD
+            $options = [
+                'allow_create_pix_key' => $dados['allow_create_pix_key'] ?? true,
+                'expired_at' => isset($dados['expires_at']) 
+                    ? (is_string($dados['expires_at']) ? $dados['expires_at'] : $dados['expires_at']->format('Y-m-d'))
+                    : now()->addDays(30)->format('Y-m-d'),
+            ];
+            
+            // Só adicionar card_max_installment_number se CREDIT_CARD estiver nos métodos
+            if ($hasCreditCard) {
+                $options['card_max_installment_number'] = $dados['card_max_installment_number'] ?? 12;
+            }
+            
             $payload = [
                 'charge' => [
                     'name' => $dados['charge_name'] ?? 'Pagamento ' . $dados['reference_id'],
@@ -155,13 +168,7 @@ class PicPayService
                         'delivery' => $dados['delivery_amount'] ?? 0,
                     ],
                 ],
-                'options' => [
-                    'allow_create_pix_key' => $dados['allow_create_pix_key'] ?? true,
-                    'card_max_installment_number' => $dados['card_max_installment_number'] ?? 12,
-                    'expired_at' => isset($dados['expires_at']) 
-                        ? (is_string($dados['expires_at']) ? $dados['expires_at'] : $dados['expires_at']->format('Y-m-d'))
-                        : now()->addDays(30)->format('Y-m-d'),
-                ],
+                'options' => $options,
             ];
 
             $response = $this->httpClient()
