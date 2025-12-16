@@ -178,6 +178,11 @@ class PagamentoController extends Controller
         $cliente = $pagamento->cliente;
 
         // Preparar dados do pagamento no formato da API de Link de Pagamento
+        // Se valor for menor que R$ 5,00, usar apenas BRCODE (sem cartão)
+        $paymentMethods = $pagamento->valor >= 5.00 
+            ? ['BRCODE', 'CREDIT_CARD'] 
+            : ['BRCODE'];
+        
         $dadosPagamento = [
             'reference_id' => $pagamento->numero_transacao,
             'valor' => $pagamento->valor,
@@ -186,7 +191,7 @@ class PagamentoController extends Controller
             'expires_at' => now()->addDays(30)->format('Y-m-d'),
             'charge_name' => 'Pagamento - ' . ($pagamento->divida->numero_documento ?? $pagamento->numero_transacao),
             'charge_description' => 'Pagamento de dívida via PicPay - ' . $pagamento->cliente->nome,
-            'payment_methods' => ['BRCODE', 'CREDIT_CARD'],
+            'payment_methods' => $paymentMethods,
             'brcode_arrangements' => ['PICPAY', 'PIX'],
             'allow_create_pix_key' => true,
             'card_max_installment_number' => 12,

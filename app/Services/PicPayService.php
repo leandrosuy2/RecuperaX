@@ -129,6 +129,17 @@ class PicPayService
             // Converter valor para centavos (a API espera valores em centavos)
             $valorCentavos = (int) round($dados['valor'] * 100);
             
+            // Se CREDIT_CARD estiver nos métodos, garantir valor mínimo de R$ 5,00 (500 centavos)
+            $paymentMethods = $dados['payment_methods'] ?? ['BRCODE', 'CREDIT_CARD'];
+            $hasCreditCard = in_array('CREDIT_CARD', $paymentMethods);
+            
+            if ($hasCreditCard && $valorCentavos < 500) {
+                return [
+                    'success' => false,
+                    'message' => 'Valor mínimo de R$ 5,00 é necessário quando cartão de crédito está habilitado.',
+                ];
+            }
+            
             $payload = [
                 'charge' => [
                     'name' => $dados['charge_name'] ?? 'Pagamento ' . $dados['reference_id'],
@@ -136,12 +147,12 @@ class PicPayService
                     'order_number' => $dados['reference_id'],
                     'redirect_url' => $dados['return_url'] ?? $dados['callback_url'],
                     'payment' => [
-                        'methods' => $dados['payment_methods'] ?? ['BRCODE', 'CREDIT_CARD'],
+                        'methods' => $paymentMethods,
                         'brcode_arrangements' => $dados['brcode_arrangements'] ?? ['PICPAY', 'PIX'],
                     ],
                     'amounts' => [
                         'product' => $valorCentavos,
-                        'delivery' => 0,
+                        'delivery' => $dados['delivery_amount'] ?? 0,
                     ],
                 ],
                 'options' => [

@@ -127,16 +127,17 @@ class ConfiguracaoPagamentoController extends Controller
 
             $picpayService = new \App\Services\PicPayService();
             
-            // Tentar criar um pagamento de teste (valor mínimo)
+            // Tentar criar um pagamento de teste (valor mínimo para cartão é maior)
+            // Usar apenas BRCODE para teste, pois cartão tem valor mínimo maior
             $dadosTeste = [
                 'reference_id' => 'TEST-' . time(),
-                'valor' => 0.01,
+                'valor' => 1.00, // Valor mínimo de R$ 1,00 para teste
                 'callback_url' => route('picpay.webhook'),
                 'return_url' => url('/'),
                 'expires_at' => now()->addDays(30)->format('Y-m-d'),
                 'charge_name' => 'Teste de Conexão PicPay',
                 'charge_description' => 'Teste de integração com API PicPay',
-                'payment_methods' => ['BRCODE', 'CREDIT_CARD'],
+                'payment_methods' => ['BRCODE'], // Apenas BRCODE para teste (evita erro de valor mínimo do cartão)
                 'brcode_arrangements' => ['PICPAY', 'PIX'],
                 'allow_create_pix_key' => true,
                 'card_max_installment_number' => 12,
