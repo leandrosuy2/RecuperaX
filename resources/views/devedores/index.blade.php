@@ -157,16 +157,25 @@
                             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-medium">{{ $devedor->id }}</td>
                             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                                 @if($devedor->tipo_pessoa == 'F')
-                                    {{ $devedor->nome }}
+                                    {{ $devedor->nome ?? '-' }}
                                 @else
-                                    {{ $devedor->nome_fantasia ?? $devedor->razao_social }}
+                                    @php
+                                        $nomeFantasia = trim($devedor->nome_fantasia ?? '');
+                                        $razaoSocial = trim($devedor->razao_social ?? '');
+                                        $nomeEmpresa = $nomeFantasia ?: $razaoSocial;
+                                    @endphp
+                                    @if($nomeEmpresa)
+                                        {{ $nomeEmpresa }}
+                                    @else
+                                        <span class="text-gray-400 italic">Sem nome cadastrado</span>
+                                    @endif
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-mono">
                                 @if($devedor->tipo_pessoa == 'F')
-                                    {{ $devedor->cpf ? substr($devedor->cpf, 0, 3) . '.' . substr($devedor->cpf, 3, 3) . '.' . substr($devedor->cpf, 6, 3) . '-' . substr($devedor->cpf, 9, 2) : '-' }}
+                                    {{ $devedor->cpf ?? '-' }}
                                 @else
-                                    {{ $devedor->cnpj ? substr($devedor->cnpj, 0, 2) . '.' . substr($devedor->cnpj, 2, 3) . '.' . substr($devedor->cnpj, 5, 3) . '/' . substr($devedor->cnpj, 8, 4) . '-' . substr($devedor->cnpj, 12, 2) : '-' }}
+                                    {{ $devedor->cnpj ?? '-' }}
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 hidden md:table-cell">{{ $devedor->empresa_nome ?? '-' }}</td>

@@ -14,6 +14,7 @@ use App\Http\Controllers\PagamentoController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RelatorioController;
 use App\Http\Controllers\TituloController;
+use App\Models\Titulo;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -148,6 +149,16 @@ Route::middleware('group_required:2')->group(function () {
 Route::middleware('group_required:2')->group(function () {
     Route::get('/titulos/quitados', [TituloController::class, 'quitados_listar'])->name('titulos.quitados');
 });
+
+// Rota de compatibilidade para detalhes-devedor (redireciona para titulos.show)
+Route::get('/detalhes-devedor/{titulo}', function ($titulo) {
+    try {
+        $tituloModel = Titulo::findOrFail($titulo);
+        return redirect()->route('titulos.show', $tituloModel);
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        abort(404, 'Título não encontrado');
+    }
+})->name('detalhes-devedor');
 
 Route::resource('titulos', TituloController::class);
 Route::post('/titulos/{titulo}/finalizar', [TituloController::class, 'finalizar'])->name('titulos.finalizar');

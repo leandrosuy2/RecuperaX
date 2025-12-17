@@ -110,7 +110,20 @@ class TituloController extends Controller
      */
     public function show(Titulo $titulo)
     {
-        $titulo->load(['devedor', 'empresa', 'tipoDoc', 'acordos.parcelas']);
+        // Carregar relacionamentos de forma otimizada
+        $titulo->load([
+            'devedor:id,nome,razao_social,cpf,cnpj,nome_mae',
+            'empresa:id,razao_social,nome_fantasia',
+            'tipoDoc:id,name',
+            'acordos' => function($query) {
+                $query->select('id', 'titulo_id', 'valor_total_negociacao', 'created_at')
+                      ->limit(50); // Limitar acordos para evitar timeout
+            },
+            'acordos.parcelas' => function($query) {
+                $query->select('id', 'acordo_id', 'parcela_numero', 'data_vencimento', 'valor', 'status')
+                      ->limit(100); // Limitar parcelas para evitar timeout
+            }
+        ]);
         
         return view('titulos.show', compact('titulo'));
     }
