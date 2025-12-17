@@ -153,9 +153,13 @@ class PicPayService
                 $options['card_max_installment_number'] = $dados['card_max_installment_number'] ?? 12;
             }
             
+            // Garantir que charge_name não exceda 50 caracteres
+            $chargeName = $dados['charge_name'] ?? 'Pagamento ' . $dados['reference_id'];
+            $chargeName = mb_substr($chargeName, 0, 50);
+            
             $payload = [
                 'charge' => [
-                    'name' => $dados['charge_name'] ?? 'Pagamento ' . $dados['reference_id'],
+                    'name' => $chargeName,
                     'description' => $dados['charge_description'] ?? 'Pagamento via PicPay',
                     'order_number' => $dados['reference_id'],
                     'redirect_url' => $dados['return_url'] ?? $dados['callback_url'],

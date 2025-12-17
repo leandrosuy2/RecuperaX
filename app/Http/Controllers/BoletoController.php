@@ -711,10 +711,19 @@ class BoletoController extends Controller
             // Preparar nome da empresa (limitar para não exceder 50 caracteres no charge_name)
             $empresaNome = $validated['empresa_nome'] ?? $empresa->razao_social;
             $prefixo = 'Comissão - ';
-            $tamanhoMaximo = 50 - strlen($prefixo);
-            $empresaNomeTruncado = mb_strlen($empresaNome) > $tamanhoMaximo 
-                ? mb_substr($empresaNome, 0, $tamanhoMaximo - 3) . '...' 
-                : $empresaNome;
+            
+            // Garantir que o nome completo (prefixo + nome) não exceda 50 caracteres
+            $nomeCompleto = $prefixo . $empresaNome;
+            if (mb_strlen($nomeCompleto) > 50) {
+                $tamanhoDisponivel = 50 - mb_strlen($prefixo) - 3; // -3 para "..."
+                $empresaNomeTruncado = mb_substr($empresaNome, 0, max(1, $tamanhoDisponivel)) . '...';
+                $chargeName = $prefixo . $empresaNomeTruncado;
+            } else {
+                $chargeName = $nomeCompleto;
+            }
+            
+            // Garantir que não exceda 50 caracteres (segurança extra)
+            $chargeName = mb_substr($chargeName, 0, 50);
             
             $dadosPagamento = [
                 'reference_id' => $referenceId,
@@ -722,7 +731,7 @@ class BoletoController extends Controller
                 'callback_url' => route('picpay.webhook'),
                 'return_url' => route('emitir-boletos'),
                 'expires_at' => now()->addDays(30)->format('Y-m-d'),
-                'charge_name' => $prefixo . $empresaNomeTruncado,
+                'charge_name' => $chargeName,
                 'charge_description' => 'Pagamento de comissão referente ao período de 12/12/2025 até 18/12/2025 - ' . $empresaNome,
                 'payment_methods' => $paymentMethods,
                 'brcode_arrangements' => ['PICPAY', 'PIX'],
