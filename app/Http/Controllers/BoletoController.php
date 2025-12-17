@@ -686,8 +686,14 @@ class BoletoController extends Controller
             $empresa = Empresa::findOrFail($validated['empresa_id']);
             $picpayService = new \App\Services\PicPayService();
 
-            // Gerar reference_id único
-            $referenceId = 'COBRANCA-' . $empresa->id . '-' . time();
+            // Gerar reference_id único (máximo 15 caracteres para PicPay)
+            // Formato: empresa_id + timestamp (últimos dígitos)
+            $empresaId = (string) $empresa->id;
+            $timestamp = substr(time(), -12); // Últimos 12 dígitos do timestamp
+            $referenceId = $empresaId . $timestamp;
+            
+            // Garantir que não ultrapasse 15 caracteres
+            $referenceId = substr($referenceId, 0, 15);
 
             // Determinar métodos de pagamento (se valor >= R$ 5,00, permite cartão)
             $paymentMethods = $validated['valor'] >= 5.00 
