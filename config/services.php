@@ -50,4 +50,12 @@ return [
         'sandbox' => env('PICPAY_SANDBOX', false),
     ],
 
+    'whatsapp' => [
+        'api_key' => env('WHATSAPP_API_KEY'),
+        'api_url' => env('WHATSAPP_API_URL', 'https://recuperax-evolution-api.npfp58.easypanel.host'),
+        'instance_name' => env('WHATSAPP_INSTANCE_NAME'),
+        'webhook_url' => env('WHATSAPP_WEBHOOK_URL'),
+        'enabled' => env('WHATSAPP_ENABLED', false),
+    ],
+
 ];

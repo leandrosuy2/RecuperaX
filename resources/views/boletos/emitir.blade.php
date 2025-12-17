@@ -153,6 +153,15 @@
                                         </svg>
                                     </button>
 
+                                    <!-- Cobrar via WhatsApp -->
+                                    <button onclick="cobrarViaWhatsapp({{ $empresa->empresa_id }}, {{ $empresa->comissao_total }}, '{{ addslashes($empresa->razao_social) }}', '{{ $empresa->telefone ?? '' }}')"
+                                            class="p-2 text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900 rounded-lg transition-colors"
+                                            title="Cobrar via WhatsApp">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                        </svg>
+                                    </button>
+
                                     <!-- Excluir -->
                                     <button onclick="excluirEmpresa({{ $empresa->empresa_id }}, '{{ addslashes($empresa->razao_social) }}')"
                                             class="p-2 text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg transition-colors"
@@ -403,6 +412,57 @@
             </div>
         </div>
 
+        <!-- Modal de Cobrar via WhatsApp -->
+        <div id="modal-cobrar-whatsapp" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white dark:bg-gray-800">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Cobrar via WhatsApp</h3>
+                    <button onclick="fecharModalCobrarWhatsapp()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <form id="form-cobrar-whatsapp" onsubmit="enviarCobrancaWhatsapp(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Empresa</label>
+                            <input type="text" id="cobrar-empresa-nome" readonly class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2">
+                            <input type="hidden" id="cobrar-empresa-id" name="empresa_id">
+                            <input type="hidden" id="cobrar-valor-comissao" name="valor_comissao">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Número do WhatsApp <span class="text-red-500">*</span></label>
+                            <input type="text" id="cobrar-whatsapp-numero" name="numero_whatsapp"
+                                   placeholder="5511999999999" required
+                                   class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Formato: código do país + DDD + número (ex: 5511999999999)</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Link de Pagamento</label>
+                            <input type="url" id="cobrar-link-pagamento" name="link_pagamento"
+                                   placeholder="https://..." 
+                                   class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Link do boleto ou sistema de pagamento</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mensagem</label>
+                            <textarea id="cobrar-mensagem" name="mensagem" rows="10"
+                                      class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"></textarea>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 justify-end mt-6">
+                        <button type="button" onclick="fecharModalCobrarWhatsapp()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg">
+                            Cancelar
+                        </button>
+                        <button type="submit" id="btn-enviar-cobranca" class="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg">
+                            Enviar Mensagem
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Modal de Envio WhatsApp -->
         <div id="modal-whatsapp" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
             <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white dark:bg-gray-800">
@@ -628,6 +688,157 @@
                     // Implementar exclusão (remover da visualização atual)
                     alert('Funcionalidade de exclusão será implementada');
                 }
+            }
+
+            function cobrarViaWhatsapp(empresaId, valorComissao, empresaNome, telefone) {
+                document.getElementById('cobrar-empresa-id').value = empresaId;
+                document.getElementById('cobrar-empresa-nome').value = empresaNome;
+                document.getElementById('cobrar-valor-comissao').value = valorComissao;
+                
+                // Limpar campos
+                document.getElementById('cobrar-link-pagamento').value = '';
+                document.getElementById('cobrar-mensagem').value = '';
+                
+                // Preencher telefone se disponível
+                if (telefone) {
+                    // Limpar e formatar telefone
+                    const telefoneLimpo = telefone.replace(/\D/g, '');
+                    if (telefoneLimpo.length >= 10) {
+                        // Se não começa com 55, adicionar
+                        const telefoneFormatado = telefoneLimpo.startsWith('55') ? telefoneLimpo : '55' + telefoneLimpo;
+                        document.getElementById('cobrar-whatsapp-numero').value = telefoneFormatado;
+                    }
+                }
+
+                // Mostrar modal com loading
+                document.getElementById('modal-cobrar-whatsapp').classList.remove('hidden');
+                const button = document.getElementById('btn-enviar-cobranca');
+                button.disabled = true;
+                button.innerHTML = '<svg class="w-4 h-4 animate-spin inline mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Gerando link...';
+
+                // Gerar link de pagamento PicPay
+                fetch('/boletos/gerar-link-picpay', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        empresa_id: empresaId,
+                        valor: valorComissao,
+                        empresa_nome: empresaNome
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.message || 'Erro ao gerar link de pagamento');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    button.disabled = false;
+                    button.innerHTML = 'Enviar Mensagem';
+                    
+                    if (data.success && data.payment_url) {
+                        document.getElementById('cobrar-link-pagamento').value = data.payment_url;
+                        
+                        // Montar mensagem com link
+                        const dataInicio = '12/12/2025';
+                        const dataFim = '18/12/2025';
+                        const valorFormatado = parseFloat(valorComissao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+                        const linkPagamento = data.payment_url;
+                        
+                        let mensagem = `Olá, segue link de acesso ao título referente aos nossos honorários, esses referente ao período de ${dataInicio} até ${dataFim}.\n\n`;
+                        mensagem += `O relatório do mesmo encontra-se disponível no seu acesso ao escritório on-line\n\n`;
+                        mensagem += `${linkPagamento}\n\n`;
+                        mensagem += `Valor da comissão: R$ ${valorFormatado}\n\n`;
+                        mensagem += `Pedimos que ao efetuar o pagamento nos encaminhe o comprovante.\n\n`;
+                        mensagem += `Att:.\n`;
+                        mensagem += `Financeiro BRD intermediações`;
+                        
+                        document.getElementById('cobrar-mensagem').value = mensagem;
+                    } else {
+                        const errorMsg = data.message || 'Erro ao gerar link de pagamento. Verifique as configurações do PicPay.';
+                        alert('⚠️ ' + errorMsg + '\n\nVocê pode adicionar o link manualmente no campo "Link de Pagamento".');
+                        
+                        // Montar mensagem sem link
+                        const dataInicio = '12/12/2025';
+                        const dataFim = '18/12/2025';
+                        const valorFormatado = parseFloat(valorComissao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+                        
+                        let mensagem = `Olá, segue link de acesso ao título referente aos nossos honorários, esses referente ao período de ${dataInicio} até ${dataFim}.\n\n`;
+                        mensagem += `O relatório do mesmo encontra-se disponível no seu acesso ao escritório on-line\n\n`;
+                        mensagem += `Valor da comissão: R$ ${valorFormatado}\n\n`;
+                        mensagem += `Pedimos que ao efetuar o pagamento nos encaminhe o comprovante.\n\n`;
+                        mensagem += `Att:.\n`;
+                        mensagem += `Financeiro BRD intermediações`;
+                        
+                        document.getElementById('cobrar-mensagem').value = mensagem;
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao gerar link:', error);
+                    button.disabled = false;
+                    button.innerHTML = 'Enviar Mensagem';
+                    
+                    const errorMsg = error.message || 'Erro ao gerar link de pagamento. Verifique as configurações do PicPay nas configurações de pagamento.';
+                    alert('⚠️ ' + errorMsg + '\n\nVocê pode adicionar o link manualmente no campo "Link de Pagamento".');
+                    
+                    // Montar mensagem sem link
+                    const dataInicio = '12/12/2025';
+                    const dataFim = '18/12/2025';
+                    const valorFormatado = parseFloat(valorComissao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+                    
+                    let mensagem = `Olá, segue link de acesso ao título referente aos nossos honorários, esses referente ao período de ${dataInicio} até ${dataFim}.\n\n`;
+                    mensagem += `O relatório do mesmo encontra-se disponível no seu acesso ao escritório on-line\n\n`;
+                    mensagem += `Valor da comissão: R$ ${valorFormatado}\n\n`;
+                    mensagem += `Pedimos que ao efetuar o pagamento nos encaminhe o comprovante.\n\n`;
+                    mensagem += `Att:.\n`;
+                    mensagem += `Financeiro BRD intermediações`;
+                    
+                    document.getElementById('cobrar-mensagem').value = mensagem;
+                });
+            }
+
+            function fecharModalCobrarWhatsapp() {
+                document.getElementById('modal-cobrar-whatsapp').classList.add('hidden');
+            }
+
+            function enviarCobrancaWhatsapp(event) {
+                event.preventDefault();
+                const form = event.target;
+                const formData = new FormData(form);
+                
+                const button = document.getElementById('btn-enviar-cobranca');
+                button.disabled = true;
+                button.innerHTML = '<svg class="w-4 h-4 animate-spin inline mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Enviando...';
+
+                fetch('/boletos/cobrar-via-whatsapp', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('✓ ' + data.message);
+                        fecharModalCobrarWhatsapp();
+                    } else {
+                        alert('✗ ' + (data.message || 'Erro ao enviar mensagem'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('✗ Erro ao enviar mensagem.');
+                })
+                .finally(() => {
+                    button.disabled = false;
+                    button.innerHTML = 'Enviar Mensagem';
+                });
             }
 
             // Processar emissão de boleto

@@ -96,6 +96,16 @@ Route::middleware('auth')->group(function () {
     Route::put('/configuracoes/pagamento', [\App\Http\Controllers\ConfiguracaoPagamentoController::class, 'update'])->name('configuracoes.pagamento.update');
     Route::post('/configuracoes/pagamento/testar', [\App\Http\Controllers\ConfiguracaoPagamentoController::class, 'testarConexao'])->name('configuracoes.pagamento.testar');
     
+    // Configurações do WhatsApp
+    Route::get('/configuracoes/whatsapp', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'index'])->name('configuracoes.whatsapp');
+    Route::put('/configuracoes/whatsapp', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'update'])->name('configuracoes.whatsapp.update');
+    Route::post('/configuracoes/whatsapp/testar', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'testarConexao'])->name('configuracoes.whatsapp.testar');
+    Route::post('/configuracoes/whatsapp/instancia/criar', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'criarInstancia'])->name('configuracoes.whatsapp.instancia.criar');
+    Route::post('/configuracoes/whatsapp/instancia/qrcode', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'obterQrCode'])->name('configuracoes.whatsapp.instancia.qrcode');
+    Route::post('/configuracoes/whatsapp/instancia/status', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'statusInstancia'])->name('configuracoes.whatsapp.instancia.status');
+    Route::post('/configuracoes/whatsapp/instancia/enviar-mensagem', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'enviarMensagemTeste'])->name('configuracoes.whatsapp.instancia.enviar-mensagem');
+    Route::delete('/configuracoes/whatsapp/instancia/deletar', [\App\Http\Controllers\ConfiguracaoWhatsappController::class, 'deletarInstancia'])->name('configuracoes.whatsapp.instancia.deletar');
+    
     // Webhook PicPay (sem autenticação)
     Route::post('/picpay/webhook', [PagamentoController::class, 'webhookPicPay'])->name('picpay.webhook');
 
@@ -141,6 +151,9 @@ Route::middleware('group_required:2')->group(function () {
     Route::get('/emitir-boletos/detalhes-empresa/{empresaId}', [BoletoController::class, 'detalhesEmpresa'])->name('detalhes-empresa');
     Route::post('/gerar-cobranca', [BoletoController::class, 'gerarCobranca'])->name('gerar-cobranca');
     Route::post('/boletos/{boleto}/enviar-whatsapp', [BoletoController::class, 'enviarWhatsapp'])->name('enviar-whatsapp');
+    Route::get('/cobrancas/buscar-por-empresa/{empresaId}', [BoletoController::class, 'buscarCobrancaPorEmpresa'])->name('cobrancas.buscar-por-empresa');
+    Route::post('/boletos/gerar-link-picpay', [BoletoController::class, 'gerarLinkPicpay'])->name('boletos.gerar-link-picpay');
+    Route::post('/boletos/cobrar-via-whatsapp', [BoletoController::class, 'cobrarViaWhatsapp'])->name('boletos.cobrar-via-whatsapp');
     Route::post('/consultar-api', [BoletoController::class, 'consultarApi'])->name('consultar-api');
 });
 

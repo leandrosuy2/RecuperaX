@@ -657,4 +657,222 @@ class BoletoController extends Controller
 
         return response()->download($path);
     }
+
+    public function buscarCobrancaPorEmpresa($empresaId)
+    {
+        $cobranca = Cobranca::where('empresa_id', $empresaId)
+            ->latest('created_at')
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'cobranca' => $cobranca ? [
+                'id' => $cobranca->id,
+                'link' => $cobranca->link,
+                'valor_comissao' => $cobranca->valor_comissao,
+            ] : null
+        ]);
+    }
+
+    public function gerarLinkPicpay(Request $request)
+    {
+        $validated = $request->validate([
+            'empresa_id' => 'required|exists:core_empresa,id',
+            'valor' => 'required|numeric|min:0.01',
+            'empresa_nome' => 'nullable|string',
+        ]);
+
+        try {
+            $empresa = Empresa::findOrFail($validated['empresa_id']);
+            $picpayService = new \App\Services\PicPayService();
+
+            // Gerar reference_id único
+            $referenceId = 'COBRANCA-' . $empresa->id . '-' . time();
+
+            // Determinar métodos de pagamento (se valor >= R$ 5,00, permite cartão)
+            $paymentMethods = $validated['valor'] >= 5.00 
+                ? ['BRCODE', 'CREDIT_CARD'] 
+                : ['BRCODE'];
+
+            $dadosPagamento = [
+                'reference_id' => $referenceId,
+                'valor' => $validated['valor'],
+                'callback_url' => route('picpay.webhook'),
+                'return_url' => route('emitir-boletos'),
+                'expires_at' => now()->addDays(30)->format('Y-m-d'),
+                'charge_name' => 'Comissão - ' . ($validated['empresa_nome'] ?? $empresa->razao_social),
+                'charge_description' => 'Pagamento de comissão referente ao período de 12/12/2025 até 18/12/2025 - ' . ($validated['empresa_nome'] ?? $empresa->razao_social),
+                'payment_methods' => $paymentMethods,
+                'brcode_arrangements' => ['PICPAY', 'PIX'],
+                'allow_create_pix_key' => true,
+            ];
+
+            // Só adicionar card_max_installment_number se CREDIT_CARD estiver nos métodos
+            if (in_array('CREDIT_CARD', $paymentMethods)) {
+                $dadosPagamento['card_max_installment_number'] = 12;
+            }
+
+            $resultado = $picpayService->criarPagamento($dadosPagamento);
+
+            if ($resultado['success']) {
+                return response()->json([
+                    'success' => true,
+                    'payment_url' => $resultado['payment_url'],
+                    'reference_id' => $referenceId,
+                    'message' => 'Link de pagamento gerado com sucesso!',
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => $resultado['message'] ?? 'Erro ao gerar link de pagamento',
+                ], 400);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Erro ao gerar link PicPay:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao gerar link de pagamento: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function cobrarViaWhatsapp(Request $request)
+    {
+        $validated = $request->validate([
+            'empresa_id' => 'required|exists:core_empresa,id',
+            'numero_whatsapp' => 'required|string',
+            'mensagem' => 'required|string',
+            'link_pagamento' => 'nullable|url',
+            'valor_comissao' => 'required|numeric',
+        ]);
+
+        try {
+            $apiUrl = rtrim(config('services.whatsapp.api_url', 'https://recuperax-evolution-api.npfp58.easypanel.host'), '/');
+            $apiKey = config('services.whatsapp.api_key');
+
+            if (!$apiKey) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'API Key do WhatsApp não configurada.',
+                ], 400);
+            }
+
+            // Buscar instância ativa (conectada)
+            $httpClientTemp = Http::timeout(15)->withHeaders(['apikey' => $apiKey]);
+            if (app()->environment('local', 'development')) {
+                $httpClientTemp = $httpClientTemp->withoutVerifying();
+            }
+
+            $instanciasResponse = $httpClientTemp->get($apiUrl . '/instance/fetchInstances');
+            $instanceName = null;
+
+            if ($instanciasResponse->successful()) {
+                $instancias = $instanciasResponse->json();
+                if (is_array($instancias)) {
+                    foreach ($instancias as $inst) {
+                        $status = strtolower($inst['connectionStatus'] ?? '');
+                        if ($status === 'open') {
+                            $instanceName = $inst['name'] ?? null;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Se não encontrou instância ativa, usar a configurada
+            if (!$instanceName) {
+                $instanceName = config('services.whatsapp.instance_name');
+            }
+
+            if (!$instanceName) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nenhuma instância do WhatsApp conectada encontrada. Conecte uma instância primeiro.',
+                ], 400);
+            }
+
+            // Preparar cliente HTTP
+            $httpClient = Http::timeout(20)
+                ->connectTimeout(10)
+                ->withHeaders([
+                    'apikey' => $apiKey,
+                    'Content-Type' => 'application/json',
+                ]);
+
+            if (app()->environment('local', 'development')) {
+                $httpClient = $httpClient->withoutVerifying();
+            }
+
+            // Limpar e formatar número
+            $numero = preg_replace('/[^0-9+]/', '', $validated['numero_whatsapp']);
+            if (!str_starts_with($numero, '+')) {
+                if (!str_starts_with($numero, '55')) {
+                    $numero = '55' . $numero;
+                }
+            } else {
+                $numero = ltrim($numero, '+');
+            }
+
+            // Validar formato do número
+            $numeroLimpo = preg_replace('/\D/', '', $numero);
+            if (strlen($numeroLimpo) < 12 || strlen($numeroLimpo) > 15) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Número de telefone inválido. O número deve ter entre 12 e 15 dígitos.',
+                ], 400);
+            }
+
+            // Payload para Evolution API
+            $payload = [
+                'number' => $numero,
+                'text' => $validated['mensagem'],
+            ];
+
+            // Enviar mensagem via Evolution API
+            $response = $httpClient->post($apiUrl . '/message/sendText/' . rawurlencode($instanceName), $payload);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Mensagem enviada com sucesso via WhatsApp!',
+                    'data' => $data,
+                ]);
+            } else {
+                $errorData = $response->json();
+                $errorMessage = 'Erro ao enviar mensagem via WhatsApp.';
+                
+                if (isset($errorData['response']['message']) && is_array($errorData['response']['message'])) {
+                    foreach ($errorData['response']['message'] as $msg) {
+                        if (is_array($msg) && isset($msg['exists']) && $msg['exists'] === false) {
+                            $errorMessage = "O número não existe no WhatsApp ou não está registrado.";
+                            break;
+                        }
+                    }
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $errorMessage . ' (Status: ' . $response->status() . ')',
+                ], 400);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Erro ao enviar cobrança via WhatsApp:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao enviar mensagem: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }
