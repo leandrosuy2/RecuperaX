@@ -154,7 +154,7 @@
                                     </button>
 
                                     <!-- Cobrar via WhatsApp -->
-                                    <button onclick="cobrarViaWhatsapp({{ $empresa->empresa_id }}, {{ $empresa->comissao_total }}, '{{ addslashes($empresa->razao_social) }}', '{{ $empresa->telefone ?? '' }}')"
+                                    <button onclick="cobrarViaWhatsapp({{ $empresa->empresa_id }}, {{ $empresa->comissao_total }}, '{{ addslashes($empresa->razao_social) }}', '{{ $empresa->whatsapp_financeiro ?? '' }}')"
                                             class="p-2 text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900 rounded-lg transition-colors"
                                             title="Cobrar via WhatsApp">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

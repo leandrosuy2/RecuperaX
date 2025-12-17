@@ -343,6 +343,7 @@ class BoletoController extends Controller
                    e.razao_social,
                    e.cnpj,
                    e.telefone,
+                   e.whatsapp_financeiro,
                    ea.dias_max_emp_hist AS dias_max,
                    ea.valor_recebido_total AS valor_recebido,
                    ea.comissao_total AS comissao_total,
