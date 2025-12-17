@@ -91,9 +91,9 @@
                             <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Ações</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody id="empresas-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                         @forelse($empresasComComissao as $empresa)
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <tr id="empresa-row-{{ $empresa->empresa_id }}" class="hover:bg-gray-50 dark:hover:bg-gray-700">
                             <td class="px-4 py-4">
                                 <div>
                                     <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ $empresa->razao_social }}</div>
@@ -159,6 +159,15 @@
                                             title="Cobrar via WhatsApp">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                        </svg>
+                                    </button>
+
+                                    <!-- Dar Baixa -->
+                                    <button onclick="darBaixaEmpresa({{ $empresa->empresa_id }}, {{ $empresa->comissao_total }}, '{{ addslashes($empresa->razao_social) }}')"
+                                            class="p-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900 rounded-lg transition-colors"
+                                            title="Dar Baixa (Marcar como Pago)">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                     </button>
 
@@ -464,6 +473,43 @@
             </div>
         </div>
 
+        <!-- Modal de Confirmação Dar Baixa -->
+        <div id="modal-confirmar-baixa" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50" onclick="if(event.target.id === 'modal-confirmar-baixa') fecharModalConfirmarBaixa()">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white dark:bg-gray-800" onclick="event.stopPropagation()">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Confirmar Baixa</h3>
+                    <button onclick="fecharModalConfirmarBaixa()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Empresa</label>
+                        <input type="text" id="confirmar-baixa-empresa-nome" readonly class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valor da Comissão</label>
+                        <input type="text" id="confirmar-baixa-valor" readonly class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2">
+                    </div>
+                    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                        <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                            <strong>Atenção:</strong> Ao confirmar, a empresa será marcada como paga e removida da lista de emissão de boletos.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex gap-3 justify-end mt-6">
+                    <button type="button" onclick="fecharModalConfirmarBaixa()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg">
+                        Cancelar
+                    </button>
+                    <button type="button" onclick="confirmarBaixa()" id="btn-confirmar-baixa" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">
+                        Confirmar Baixa
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal de Envio WhatsApp -->
         <div id="modal-whatsapp" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
             <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white dark:bg-gray-800">
@@ -689,6 +735,92 @@
                     // Implementar exclusão (remover da visualização atual)
                     alert('Funcionalidade de exclusão será implementada');
                 }
+            }
+
+            // Variáveis globais para o modal de confirmação
+            let empresaBaixaId = null;
+            let empresaBaixaValor = null;
+            let empresaBaixaNome = null;
+
+            function darBaixaEmpresa(empresaId, valorComissao, empresaNome) {
+                // Armazenar dados para usar no confirmar
+                empresaBaixaId = empresaId;
+                empresaBaixaValor = valorComissao;
+                empresaBaixaNome = empresaNome;
+
+                // Preencher o modal
+                document.getElementById('confirmar-baixa-empresa-nome').value = empresaNome;
+                document.getElementById('confirmar-baixa-valor').value = 'R$ ' + parseFloat(valorComissao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+                // Abrir modal
+                document.getElementById('modal-confirmar-baixa').classList.remove('hidden');
+            }
+
+            function fecharModalConfirmarBaixa() {
+                document.getElementById('modal-confirmar-baixa').classList.add('hidden');
+                empresaBaixaId = null;
+                empresaBaixaValor = null;
+                empresaBaixaNome = null;
+            }
+
+            function confirmarBaixa() {
+                if (!empresaBaixaId) {
+                    return;
+                }
+
+                // Encontrar a linha da tabela pelo ID
+                const row = document.getElementById('empresa-row-' + empresaBaixaId);
+
+                // Desabilitar botão durante o processamento
+                const btnConfirmar = document.getElementById('btn-confirmar-baixa');
+                btnConfirmar.disabled = true;
+                btnConfirmar.innerHTML = '<svg class="w-4 h-4 animate-spin inline mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...';
+
+                fetch('/boletos/dar-baixa-empresa', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        empresa_id: empresaBaixaId,
+                        valor_comissao: empresaBaixaValor
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Fechar modal
+                        fecharModalConfirmarBaixa();
+
+                        // Remover a linha da tabela com animação
+                        if (row) {
+                            row.style.transition = 'opacity 0.3s';
+                            row.style.opacity = '0';
+                            setTimeout(() => {
+                                row.remove();
+                                // Verificar se não há mais empresas na tabela
+                                const tbody = document.getElementById('empresas-table-body');
+                                if (tbody && tbody.children.length === 0) {
+                                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma empresa encontrada.</td></tr>';
+                                }
+                            }, 300);
+                        }
+
+                        // Mostrar mensagem de sucesso
+                        alert('✓ ' + data.message);
+                    } else {
+                        btnConfirmar.disabled = false;
+                        btnConfirmar.textContent = 'Confirmar Baixa';
+                        alert('✗ ' + (data.message || 'Erro ao dar baixa'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.textContent = 'Confirmar Baixa';
+                    alert('✗ Erro ao dar baixa');
+                });
             }
 
             function cobrarViaWhatsapp(empresaId, valorComissao, empresaNome, telefone) {

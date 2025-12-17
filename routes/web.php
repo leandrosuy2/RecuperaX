@@ -155,6 +155,7 @@ Route::middleware('group_required:2')->group(function () {
     Route::get('/cobrancas/buscar-por-empresa/{empresaId}', [BoletoController::class, 'buscarCobrancaPorEmpresa'])->name('cobrancas.buscar-por-empresa');
     Route::post('/boletos/gerar-link-picpay', [BoletoController::class, 'gerarLinkPicpay'])->name('boletos.gerar-link-picpay');
     Route::post('/boletos/cobrar-via-whatsapp', [BoletoController::class, 'cobrarViaWhatsapp'])->name('boletos.cobrar-via-whatsapp');
+    Route::post('/boletos/dar-baixa-empresa', [BoletoController::class, 'darBaixaEmpresa'])->name('boletos.dar-baixa-empresa');
     Route::post('/consultar-api', [BoletoController::class, 'consultarApi'])->name('consultar-api');
 });
 

@@ -352,9 +352,14 @@ class BoletoController extends Controller
                    ea.devedores_ids
             FROM empresa_aggr ea
             JOIN core_empresa e ON e.id = ea.empresa_id
+            LEFT JOIN core_cobranca c ON c.empresa_id = e.id 
+                AND c.data_cobranca >= ? 
+                AND c.data_cobranca < ?
+                AND c.pago = 1
             WHERE ea.comissao_total > 0
+                AND c.id IS NULL
             ORDER BY e.razao_social ASC
-        ", [$sextaInicio->toDateString(), $sextaFim->toDateString()]);
+        ", [$sextaInicio->toDateString(), $sextaFim->toDateString(), $sextaInicio->toDateString(), $sextaFim->toDateString()]);
 
         \Log::info('Query calcularComissoesPorEmpresa retornou ' . count($resultados) . ' empresas');
 
@@ -987,6 +992,64 @@ class BoletoController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erro ao enviar mensagem: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Dar baixa em uma empresa (marcar cobrança como paga)
+     */
+    public function darBaixaEmpresa(Request $request)
+    {
+        $validated = $request->validate([
+            'empresa_id' => 'required|exists:core_empresa,id',
+            'valor_comissao' => 'required|numeric|min:0.01',
+        ]);
+
+        try {
+            // Buscar ou criar cobrança para a empresa
+            $cobranca = Cobranca::where('empresa_id', $validated['empresa_id'])
+                ->where('data_cobranca', now()->toDateString())
+                ->where('valor_comissao', $validated['valor_comissao'])
+                ->first();
+
+            if (!$cobranca) {
+                // Criar cobrança se não existir
+                $cobranca = Cobranca::create([
+                    'empresa_id' => $validated['empresa_id'],
+                    'data_cobranca' => now()->toDateString(),
+                    'valor_comissao' => $validated['valor_comissao'],
+                    'pago' => true, // Já marcar como pago
+                    'tipo_anexo' => null,
+                    'link' => null,
+                ]);
+            } else {
+                // Marcar como pago
+                $cobranca->pago = true;
+                $cobranca->save();
+            }
+
+            \Log::info('Baixa dada para empresa', [
+                'empresa_id' => $validated['empresa_id'],
+                'cobranca_id' => $cobranca->id,
+                'valor_comissao' => $validated['valor_comissao'],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Baixa registrada com sucesso! A empresa foi removida da lista.',
+                'cobranca_id' => $cobranca->id,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Erro ao dar baixa na empresa:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao dar baixa: ' . $e->getMessage(),
             ], 500);
         }
     }
