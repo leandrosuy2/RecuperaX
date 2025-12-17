@@ -322,13 +322,21 @@ class PagamentoController extends Controller
             ? ['BRCODE', 'CREDIT_CARD'] 
             : ['BRCODE'];
         
+        // Preparar nome do pagamento (limitar para não exceder 50 caracteres no charge_name)
+        $numeroDoc = $pagamento->divida->numero_documento ?? $pagamento->numero_transacao;
+        $prefixo = 'Pagamento - ';
+        $tamanhoMaximo = 50 - strlen($prefixo);
+        $numeroDocTruncado = mb_strlen($numeroDoc) > $tamanhoMaximo 
+            ? mb_substr($numeroDoc, 0, $tamanhoMaximo - 3) . '...' 
+            : $numeroDoc;
+        
         $dadosPagamento = [
             'reference_id' => $pagamento->numero_transacao,
             'valor' => $pagamento->valor,
             'callback_url' => route('picpay.webhook'),
             'return_url' => route('pagamentos.show', $pagamento),
             'expires_at' => now()->addDays(30)->format('Y-m-d'),
-            'charge_name' => 'Pagamento - ' . ($pagamento->divida->numero_documento ?? $pagamento->numero_transacao),
+            'charge_name' => $prefixo . $numeroDocTruncado,
             'charge_description' => 'Pagamento de dívida via PicPay - ' . $pagamento->cliente->nome,
             'payment_methods' => $paymentMethods,
             'brcode_arrangements' => ['PICPAY', 'PIX'],
