@@ -440,6 +440,252 @@ class PicPayService
     }
 
     /**
+     * Lista transações de um payment link específico
+     */
+    public function listarTransacoes(string $paymentLinkId, ?string $dataInicio = null, ?string $dataFim = null, ?string $status = 'PAYED', int $page = 1, int $perPage = 100): array
+    {
+        $token = $this->getAccessToken();
+
+        if (!$token) {
+            Log::error('PicPayService::listarTransacoes - Token não obtido');
+            return [
+                'success' => false,
+                'message' => 'Erro ao autenticar com PicPay',
+                'transacoes' => [],
+            ];
+        }
+
+        try {
+            $queryParams = [
+                'page' => $page,
+                'perPage' => $perPage,
+                'status' => $status,
+            ];
+
+            if ($dataInicio) {
+                $queryParams['startDate'] = $dataInicio;
+            }
+
+            if ($dataFim) {
+                $queryParams['endDate'] = $dataFim;
+            }
+
+            $url = "{$this->apiUrl}/v1/paymentlink/{$paymentLinkId}/transactions";
+            
+            Log::info('PicPayService::listarTransacoes - Fazendo requisição', [
+                'url' => $url,
+                'payment_link_id' => $paymentLinkId,
+                'query_params' => $queryParams,
+                'has_token' => !empty($token),
+            ]);
+
+            $response = $this->httpClient()
+                ->withToken($token)
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                ])
+                ->get($url, $queryParams);
+            
+            Log::info('PicPayService::listarTransacoes - Resposta recebida', [
+                'status' => $response->status(),
+                'success' => $response->successful(),
+                'payment_link_id' => $paymentLinkId,
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return [
+                    'success' => true,
+                    'transacoes' => $data['transactions'] ?? [],
+                    'originId' => $data['originId'] ?? $paymentLinkId,
+                    'currentPage' => $data['currentPage'] ?? $page,
+                    'perPage' => $data['perPage'] ?? $perPage,
+                    'nextPage' => $data['nextPage'] ?? null,
+                    'previousPage' => $data['previousPage'] ?? null,
+                ];
+            }
+
+            Log::error('Erro ao listar transações PicPay', [
+                'status' => $response->status(),
+                'response' => $response->body(),
+                'payment_link_id' => $paymentLinkId,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Erro ao listar transações',
+                'transacoes' => [],
+            ];
+        } catch (\Exception $e) {
+            Log::error('Exceção ao listar transações PicPay', [
+                'message' => $e->getMessage(),
+                'payment_link_id' => $paymentLinkId,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Erro ao listar transações: ' . $e->getMessage(),
+                'transacoes' => [],
+            ];
+        }
+    }
+
+    /**
+     * Lista pagamentos realizados consultando as transações de cada payment link
+     */
+    public function listarPagamentosRealizados(array $referenceIds, ?string $dataInicio = null, ?string $dataFim = null): array
+    {
+        Log::info('=== PicPayService::listarPagamentosRealizados CHAMADO ===', [
+            'reference_ids_count' => count($referenceIds),
+            'reference_ids' => $referenceIds,
+        ]);
+        
+        $token = $this->getAccessToken();
+
+        if (!$token) {
+            Log::error('PicPayService::listarPagamentosRealizados - Token não obtido');
+            return [
+                'success' => false,
+                'message' => 'Erro ao autenticar com PicPay',
+                'pagamentos' => [],
+            ];
+        }
+        
+        Log::info('PicPayService::listarPagamentosRealizados - Token obtido com sucesso');
+
+        $pagamentosRealizados = [];
+        $erros = [];
+
+        Log::info('PicPayService::listarPagamentosRealizados - Iniciando', [
+            'total_reference_ids' => count($referenceIds),
+            'data_inicio' => $dataInicio,
+            'data_fim' => $dataFim,
+        ]);
+
+        foreach ($referenceIds as $referenceId) {
+            try {
+                Log::info('PicPayService - Consultando payment link', [
+                    'reference_id' => $referenceId,
+                ]);
+                
+                // Primeiro, consultar o payment link para obter o payment_link_id
+                $consultaPagamento = $this->consultarPagamento($referenceId);
+                
+                Log::info('PicPayService - Resposta consultarPagamento', [
+                    'reference_id' => $referenceId,
+                    'success' => $consultaPagamento['success'] ?? false,
+                    'has_data' => isset($consultaPagamento['data']),
+                ]);
+                
+                if (!$consultaPagamento['success'] || !isset($consultaPagamento['data'])) {
+                    $erros[] = [
+                        'reference_id' => $referenceId,
+                        'erro' => $consultaPagamento['message'] ?? 'Erro ao consultar payment link',
+                    ];
+                    continue;
+                }
+
+                $paymentLinkData = $consultaPagamento['data'];
+                
+                // Log para debug da estrutura retornada
+                Log::info('Estrutura payment link retornada', [
+                    'reference_id' => $referenceId,
+                    'data_keys' => array_keys($paymentLinkData),
+                ]);
+                
+                // O payment_link_id pode ser o próprio reference_id ou estar em outro campo
+                // A API pode retornar o ID em diferentes estruturas
+                // Tentar diferentes campos possíveis
+                $paymentLinkId = $paymentLinkData['id'] 
+                    ?? $paymentLinkData['payment_link']['id'] 
+                    ?? $paymentLinkData['originId']
+                    ?? $paymentLinkData['charge']['id']
+                    ?? $referenceId; // Fallback: usar o reference_id se não encontrar
+
+                // Buscar transações pagas desse payment link
+                Log::info('PicPayService - Buscando transações', [
+                    'payment_link_id' => $paymentLinkId,
+                    'reference_id' => $referenceId,
+                ]);
+                
+                $resultadoTransacoes = $this->listarTransacoes($paymentLinkId, $dataInicio, $dataFim, 'PAYED', 1, 100);
+                
+                Log::info('PicPayService - Resposta listarTransacoes', [
+                    'payment_link_id' => $paymentLinkId,
+                    'success' => $resultadoTransacoes['success'] ?? false,
+                    'total_transacoes' => count($resultadoTransacoes['transacoes'] ?? []),
+                ]);
+
+                if ($resultadoTransacoes['success']) {
+                    foreach ($resultadoTransacoes['transacoes'] as $transacao) {
+                        // Filtrar por data se fornecido
+                        $dataTransacao = $transacao['createdAt'] ?? null;
+                        
+                        if ($dataInicio || $dataFim) {
+                            if ($dataTransacao) {
+                                try {
+                                    $dataTransacaoObj = \Carbon\Carbon::parse($dataTransacao);
+                                    
+                                    if ($dataInicio && $dataTransacaoObj->lt(\Carbon\Carbon::parse($dataInicio))) {
+                                        continue;
+                                    }
+                                    
+                                    if ($dataFim && $dataTransacaoObj->gt(\Carbon\Carbon::parse($dataFim))) {
+                                        continue;
+                                    }
+                                } catch (\Exception $e) {
+                                    // Se não conseguir parsear a data, continuar
+                                }
+                            }
+                        }
+
+                        $pagamentosRealizados[] = [
+                            'reference_id' => $referenceId,
+                            'payment_link_id' => $paymentLinkId,
+                            'transaction_id' => $transacao['transactionId'] ?? null,
+                            'status' => strtolower($transacao['status'] ?? 'PAYED'),
+                            'valor' => $transacao['amount'] ?? 0,
+                            'data_pagamento' => $transacao['createdAt'] ?? null,
+                            'data_atualizacao' => $transacao['updatedAt'] ?? null,
+                            'dados_payment_link' => $paymentLinkData,
+                            'dados_transacao' => $transacao,
+                        ];
+                    }
+                } else {
+                    $erros[] = [
+                        'reference_id' => $referenceId,
+                        'erro' => $resultadoTransacoes['message'] ?? 'Erro ao buscar transações',
+                    ];
+                }
+            } catch (\Exception $e) {
+                Log::error('Erro ao consultar pagamento na listagem', [
+                    'reference_id' => $referenceId,
+                    'erro' => $e->getMessage(),
+                ]);
+                
+                $erros[] = [
+                    'reference_id' => $referenceId,
+                    'erro' => $e->getMessage(),
+                ];
+            }
+        }
+
+        // Ordenar por data de pagamento (mais recente primeiro)
+        usort($pagamentosRealizados, function($a, $b) {
+            $dataA = $a['data_pagamento'] ?? '';
+            $dataB = $b['data_pagamento'] ?? '';
+            return strtotime($dataB) - strtotime($dataA);
+        });
+
+        return [
+            'success' => true,
+            'pagamentos' => $pagamentosRealizados,
+            'total' => count($pagamentosRealizados),
+            'erros' => $erros,
+        ];
+    }
+
+    /**
      * Mapeia status do PicPay para status interno
      */
     public function mapearStatus(string $picpayStatus): string

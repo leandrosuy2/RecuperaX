@@ -430,6 +430,7 @@
                             <input type="text" id="cobrar-empresa-nome" readonly class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2">
                             <input type="hidden" id="cobrar-empresa-id" name="empresa_id">
                             <input type="hidden" id="cobrar-valor-comissao" name="valor_comissao">
+                            <input type="hidden" id="cobrar-reference-id" name="reference_id">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Número do WhatsApp <span class="text-red-500">*</span></label>
@@ -698,6 +699,7 @@
                 // Limpar campos
                 document.getElementById('cobrar-link-pagamento').value = '';
                 document.getElementById('cobrar-mensagem').value = '';
+                document.getElementById('cobrar-reference-id').value = '';
                 
                 // Preencher telefone se disponível
                 if (telefone) {
@@ -743,6 +745,11 @@
                     
                     if (data.success && data.payment_url) {
                         document.getElementById('cobrar-link-pagamento').value = data.payment_url;
+                        
+                        // Salvar reference_id se disponível
+                        if (data.reference_id) {
+                            document.getElementById('cobrar-reference-id').value = data.reference_id;
+                        }
                         
                         // Montar mensagem com link
                         const dataInicio = '12/12/2025';

@@ -106,6 +106,11 @@
                         <span>Acordos & Pagamentos</span>
                     </a>
 
+                    <a href="{{ route('pagamentos.realizados') }}"
+                       class="flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('pagamentos.realizados') ? 'bg-gray-700 dark:bg-gray-600 text-white' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-700 dark:hover:bg-gray-600 hover:text-white' }}">
+                        <span>Pagamentos Realizados (PicPay)</span>
+                    </a>
+
                     @if(auth()->user()->isAdmin() || auth()->user()->isGestor())
                     <a href="{{ route('logs.index') }}"
                        class="flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors {{ request()->routeIs('logs.*') ? 'bg-gray-700 dark:bg-gray-600 text-white' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-700 dark:hover:bg-gray-600 hover:text-white' }}">

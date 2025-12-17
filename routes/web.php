@@ -85,6 +85,7 @@ Route::middleware('auth')->group(function () {
 
     // Pagamentos
     Route::resource('pagamentos', PagamentoController::class);
+    Route::get('/pagamentos-realizados', [PagamentoController::class, 'pagamentosRealizados'])->name('pagamentos.realizados');
     Route::post('/pagamentos/{pagamento}/confirmar', [PagamentoController::class, 'confirmar'])->name('pagamentos.confirmar');
     Route::post('/pagamentos/{pagamento}/cancelar', [PagamentoController::class, 'cancelar'])->name('pagamentos.cancelar');
     Route::get('/pagamentos/{pagamento}/picpay', [PagamentoController::class, 'picpay'])->name('pagamentos.picpay');

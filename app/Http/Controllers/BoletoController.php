@@ -6,6 +6,8 @@ use App\Models\Boleto;
 use App\Models\Cobranca;
 use App\Models\Empresa;
 use App\Models\Titulo;
+use App\Models\Pagamento;
+use App\Models\Cliente;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -726,6 +728,7 @@ class BoletoController extends Controller
                     'success' => true,
                     'payment_url' => $resultado['payment_url'],
                     'reference_id' => $referenceId,
+                    'payment_link_id' => $resultado['data']['id'] ?? $referenceId, // ID do payment link
                     'message' => 'Link de pagamento gerado com sucesso!',
                 ]);
             } else {
@@ -756,9 +759,11 @@ class BoletoController extends Controller
             'mensagem' => 'required|string',
             'link_pagamento' => 'nullable|url',
             'valor_comissao' => 'required|numeric',
+            'reference_id' => 'nullable|string', // Reference ID do PicPay se já foi gerado
         ]);
 
         try {
+            $empresa = Empresa::findOrFail($validated['empresa_id']);
             $apiUrl = rtrim(config('services.whatsapp.api_url', 'https://recuperax-evolution-api.npfp58.easypanel.host'), '/');
             $apiKey = config('services.whatsapp.api_key');
 
@@ -834,6 +839,108 @@ class BoletoController extends Controller
                 ], 400);
             }
 
+            // Criar ou atualizar Cobrança ANTES de enviar a mensagem (para garantir que seja salva)
+            \Log::info('Cobrar via WhatsApp - Dados recebidos', [
+                'empresa_id' => $validated['empresa_id'],
+                'valor_comissao' => $validated['valor_comissao'],
+                'link_pagamento' => $validated['link_pagamento'] ?? 'VAZIO',
+                'reference_id' => $validated['reference_id'] ?? 'VAZIO',
+                'todos_campos' => array_keys($validated),
+            ]);
+            
+            $cobranca = Cobranca::where('empresa_id', $validated['empresa_id'])
+                ->where('data_cobranca', now()->toDateString())
+                ->where('valor_comissao', $validated['valor_comissao'])
+                ->first();
+            
+            if (!$cobranca) {
+                $cobranca = Cobranca::create([
+                    'empresa_id' => $validated['empresa_id'],
+                    'data_cobranca' => now()->toDateString(),
+                    'valor_comissao' => $validated['valor_comissao'],
+                    'pago' => false,
+                    'tipo_anexo' => 'link',
+                    'link' => $validated['link_pagamento'],
+                ]);
+                \Log::info('Cobrança criada', ['cobranca_id' => $cobranca->id]);
+            } else {
+                // Atualizar link se não tiver
+                if (!$cobranca->link && $validated['link_pagamento']) {
+                    $cobranca->link = $validated['link_pagamento'];
+                    $cobranca->save();
+                }
+                \Log::info('Cobrança já existia', ['cobranca_id' => $cobranca->id]);
+            }
+            
+            // Criar Pagamento relacionado à cobrança (se tiver link do PicPay e reference_id)
+            if (!empty($validated['link_pagamento']) && !empty($validated['reference_id'])) {
+                // Verificar se já existe um pagamento com esse reference_id
+                $pagamentoExistente = Pagamento::where('picpay_reference_id', $validated['reference_id'])->first();
+                
+                if (!$pagamentoExistente) {
+                    try {
+                        // Buscar ou criar cliente genérico para a empresa usando CNPJ
+                        $clienteEmpresa = Cliente::firstOrCreate(
+                            [
+                                'cnpj' => $empresa->cnpj,
+                            ],
+                            [
+                                'nome' => $empresa->razao_social,
+                                'cnpj' => $empresa->cnpj,
+                                'email' => $empresa->email ?? null,
+                                'telefone' => $empresa->telefone ?? null,
+                                'celular' => $empresa->celular ?? $empresa->whatsapp_financeiro ?? null,
+                                'endereco' => $empresa->endereco ?? null,
+                                'numero' => $empresa->numero ?? null,
+                                'bairro' => $empresa->bairro ?? null,
+                                'cidade' => $empresa->cidade ?? null,
+                                'estado' => $empresa->uf ?? null,
+                                'cep' => $empresa->cep ?? null,
+                                'ativo' => true,
+                            ]
+                        );
+                        
+                        // Criar Pagamento relacionado à cobrança
+                        $pagamento = Pagamento::create([
+                            'cliente_id' => $clienteEmpresa->id,
+                            'numero_transacao' => 'COBRANCA-' . $cobranca->id . '-' . time(),
+                            'valor' => $validated['valor_comissao'],
+                            'data_pagamento' => now()->toDateString(),
+                            'forma_pagamento' => 'picpay',
+                            'status' => 'pendente',
+                            'picpay_reference_id' => $validated['reference_id'],
+                            'picpay_payment_url' => $validated['link_pagamento'],
+                            'picpay_expires_at' => now()->addDays(30),
+                            'observacoes' => 'Cobrança enviada via WhatsApp - Empresa: ' . $empresa->razao_social . ' (Cobrança ID: ' . $cobranca->id . ')',
+                        ]);
+                        
+                        \Log::info('Pagamento criado para cobrança', [
+                            'pagamento_id' => $pagamento->id,
+                            'cobranca_id' => $cobranca->id,
+                            'empresa_id' => $validated['empresa_id'],
+                            'cliente_id' => $clienteEmpresa->id,
+                            'reference_id' => $validated['reference_id'],
+                            'valor' => $validated['valor_comissao'],
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error('Erro ao criar pagamento para cobrança', [
+                            'erro' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
+                    }
+                } else {
+                    \Log::info('Pagamento já existe com esse reference_id', [
+                        'pagamento_id' => $pagamentoExistente->id,
+                        'reference_id' => $validated['reference_id'],
+                    ]);
+                }
+            } else {
+                \Log::warning('Não foi possível criar pagamento - faltam dados', [
+                    'tem_link' => !empty($validated['link_pagamento']),
+                    'tem_reference_id' => !empty($validated['reference_id']),
+                ]);
+            }
+
             // Payload para Evolution API
             $payload = [
                 'number' => $numero,
@@ -850,6 +957,7 @@ class BoletoController extends Controller
                     'success' => true,
                     'message' => 'Mensagem enviada com sucesso via WhatsApp!',
                     'data' => $data,
+                    'cobranca_id' => $cobranca->id,
                 ]);
             } else {
                 $errorData = $response->json();

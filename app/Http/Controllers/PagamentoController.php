@@ -50,6 +50,145 @@ class PagamentoController extends Controller
         return view('pagamentos.index', compact('pagamentos'));
     }
 
+    /**
+     * Lista pagamentos realizados via PicPay - busca diretamente na API
+     */
+    public function pagamentosRealizados(Request $request)
+    {
+        Log::info('=== PAGAMENTOS REALIZADOS - MÉTODO CHAMADO ===');
+        
+        $user = Auth::user();
+        
+        // Buscar todos os reference_ids de pagamentos PicPay no banco
+        $queryReferenceIds = Pagamento::whereNotNull('picpay_reference_id')
+            ->with('cliente')
+            ->select('picpay_reference_id', 'id', 'cliente_id', 'numero_transacao', 'valor');
+
+        // Aplicar filtros de permissão
+        if ($user->isConsultor()) {
+            $queryReferenceIds->where('consultor_id', $user->id);
+        } elseif ($user->isCredor()) {
+            $queryReferenceIds->whereHas('divida', function($q) use ($user) {
+                $q->where('credor_id', $user->credor_id);
+            });
+        }
+
+        // Buscar reference_ids
+        $pagamentosBanco = $queryReferenceIds->get();
+        $referenceIds = $pagamentosBanco->pluck('picpay_reference_id')->toArray();
+
+        Log::info('Pagamentos realizados - Iniciando busca', [
+            'total_reference_ids' => count($referenceIds),
+            'reference_ids' => $referenceIds,
+            'user_id' => $user->id,
+        ]);
+
+        if (empty($referenceIds)) {
+            Log::info('Pagamentos realizados - Nenhum reference_id encontrado');
+            return view('pagamentos.realizados', [
+                'pagamentos' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20, 1),
+                'totalRecebido' => 0,
+                'totalMes' => 0,
+            ]);
+        }
+
+        // Buscar pagamentos na API do PicPay
+        $picpayService = new PicPayService();
+        $dataInicio = $request->filled('data_inicio') ? $request->data_inicio : null;
+        $dataFim = $request->filled('data_fim') ? $request->data_fim : null;
+        
+        Log::info('Pagamentos realizados - Chamando API PicPay', [
+            'reference_ids_count' => count($referenceIds),
+            'data_inicio' => $dataInicio,
+            'data_fim' => $dataFim,
+        ]);
+        
+        $resultado = $picpayService->listarPagamentosRealizados($referenceIds, $dataInicio, $dataFim);
+        
+        Log::info('Pagamentos realizados - Resposta da API', [
+            'success' => $resultado['success'] ?? false,
+            'total_pagamentos' => count($resultado['pagamentos'] ?? []),
+            'erros' => count($resultado['erros'] ?? []),
+        ]);
+
+        if (!$resultado['success']) {
+            return redirect()->back()
+                ->with('error', 'Erro ao buscar pagamentos no PicPay: ' . ($resultado['message'] ?? 'Erro desconhecido'));
+        }
+
+        // Criar um mapa de reference_id para dados do banco
+        $mapaBanco = $pagamentosBanco->keyBy('picpay_reference_id');
+
+        // Combinar dados da API com dados do banco
+        $pagamentosCombinados = collect($resultado['pagamentos'])->map(function($pagamentoApi) use ($mapaBanco) {
+            $pagamentoBanco = $mapaBanco->get($pagamentoApi['reference_id']);
+            
+            // Extrair URL do payment link dos dados completos
+            $paymentLinkData = $pagamentoApi['dados_payment_link'] ?? [];
+            $paymentUrl = $paymentLinkData['link'] 
+                ?? $paymentLinkData['payment_link']['link'] 
+                ?? $paymentLinkData['payment_link']['deeplink']
+                ?? null;
+            
+            return (object) [
+                'reference_id' => $pagamentoApi['reference_id'],
+                'picpay_reference_id' => $pagamentoApi['reference_id'],
+                'payment_link_id' => $pagamentoApi['payment_link_id'] ?? null,
+                'transaction_id' => $pagamentoApi['transaction_id'] ?? null,
+                'numero_transacao' => $pagamentoBanco->numero_transacao ?? 'N/A',
+                'cliente_id' => $pagamentoBanco->cliente_id ?? null,
+                'cliente' => $pagamentoBanco->cliente ?? null,
+                'valor' => ($pagamentoApi['valor'] / 100), // Converter de centavos para reais
+                'data_pagamento' => $pagamentoApi['data_pagamento'] ? \Carbon\Carbon::parse($pagamentoApi['data_pagamento']) : null,
+                'data_recebimento' => $pagamentoApi['data_pagamento'] ? \Carbon\Carbon::parse($pagamentoApi['data_pagamento']) : null,
+                'status' => 'confirmado',
+                'dados_api' => $pagamentoApi,
+                'pagamento_id' => $pagamentoBanco->id ?? null,
+                'picpay_payment_url' => $paymentUrl,
+            ];
+        });
+
+        // Aplicar filtro de busca se fornecido
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $pagamentosCombinados = $pagamentosCombinados->filter(function($pagamento) use ($search) {
+                return stripos($pagamento->numero_transacao, $search) !== false
+                    || stripos($pagamento->reference_id, $search) !== false
+                    || ($pagamento->cliente && stripos($pagamento->cliente->nome, $search) !== false);
+            });
+        }
+
+        // Calcular estatísticas
+        $totalRecebido = $pagamentosCombinados->sum('valor');
+        $totalMes = $pagamentosCombinados->filter(function($pagamento) {
+            if (!$pagamento->data_pagamento) return false;
+            return $pagamento->data_pagamento->month == now()->month 
+                && $pagamento->data_pagamento->year == now()->year;
+        })->sum('valor');
+
+        // Paginar manualmente
+        $page = $request->get('page', 1);
+        $perPage = 20;
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $pagamentosCombinados->forPage($page, $perPage),
+            $pagamentosCombinados->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        Log::info('Pagamentos realizados PicPay (API)', [
+            'total_encontrado' => $pagamentosCombinados->count(),
+            'user_id' => $user->id,
+        ]);
+
+        return view('pagamentos.realizados', [
+            'pagamentos' => $paginated,
+            'totalRecebido' => $totalRecebido,
+            'totalMes' => $totalMes,
+        ]);
+    }
+
     public function create(Request $request)
     {
         $divida = null;
