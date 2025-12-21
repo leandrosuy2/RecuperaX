@@ -48,6 +48,7 @@ return [
         'client_secret' => env('PICPAY_CLIENT_SECRET'),
         'api_url' => env('PICPAY_API_URL', 'https://api.picpay.com'),
         'sandbox' => env('PICPAY_SANDBOX', false),
+        'seller_id' => env('PICPAY_SELLER_ID'),
     ],
 
     'whatsapp' => [
