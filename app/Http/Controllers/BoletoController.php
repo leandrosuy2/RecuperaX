@@ -701,10 +701,9 @@ class BoletoController extends Controller
             // Garantir que não ultrapasse 15 caracteres
             $referenceId = substr($referenceId, 0, 15);
 
-            // Determinar métodos de pagamento (se valor >= R$ 5,00, permite cartão)
-            $paymentMethods = $validated['valor'] >= 5.00 
-                ? ['BRCODE', 'CREDIT_CARD'] 
-                : ['BRCODE'];
+            // Usar apenas BRCODE (mesmo padrão do teste de configurações que funciona)
+            // O seller pode não ter permissão para CREDIT_CARD
+            $paymentMethods = ['BRCODE'];
 
             // Preparar nome da empresa (limitar para não exceder 50 caracteres no charge_name)
             $empresaNome = $validated['empresa_nome'] ?? $empresa->razao_social;
@@ -741,10 +740,7 @@ class BoletoController extends Controller
                 'allow_create_pix_key' => true,
             ];
 
-            // Só adicionar card_max_installment_number se CREDIT_CARD estiver nos métodos
-            if (in_array('CREDIT_CARD', $paymentMethods)) {
-                $dadosPagamento['card_max_installment_number'] = 12;
-            }
+            // Não usar CREDIT_CARD para evitar erro B028 (seller sem permissão)
 
             $resultado = $picpayService->criarPagamento($dadosPagamento);
 
