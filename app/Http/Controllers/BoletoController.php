@@ -46,21 +46,19 @@ class BoletoController extends Controller
     {
         // Calcula a janela semanal baseada na data fornecida ou atual
         $refDate = $request->get('from', now()->toDateString());
+        
+        // Calcula a sexta-feira da semana baseada na data de referência
+        $sextaRef = $this->getSextaDaSemana(Carbon::parse($refDate));
+        $proximaSexta = $sextaRef->copy()->addDays(7);
 
-        // FORÇAR datas para exibição: 12/12 - 19/12
-        $sextaRef = Carbon::createFromFormat('d/m/Y', '12/12/2025');
-        $proximaSexta = Carbon::createFromFormat('d/m/Y', '19/12/2025');
+        \Log::info('=== JANELA DE COMISSÃO ===');
+        \Log::info('Data de referência: ' . $refDate);
+        \Log::info('Sexta-feira da semana: ' . $sextaRef->format('d/m/Y'));
+        \Log::info('Próxima sexta-feira: ' . $proximaSexta->format('d/m/Y'));
+        \Log::info('Query usa: ' . $sextaRef->format('Y-m-d') . ' até ' . $proximaSexta->format('Y-m-d'));
 
-        // Usar as mesmas datas para exibição e query por enquanto
-        $querySextaRef = $sextaRef;
-        $queryProximaSexta = $proximaSexta;
-
-        \Log::info('=== SISTEMA CORRIGIDO ===');
-        \Log::info('Interface mostra: 12/12/2025 - 19/12/2025');
-        \Log::info('Query usa: 11/12/2025 - 18/12/2025 (para ter 23 empresas)');
-
-        // Busca empresas elegíveis com cálculos de comissão (usando datas com mais dados)
-        $empresasComComissao = $this->calcularComissoesPorEmpresa($querySextaRef, $queryProximaSexta);
+        // Busca empresas elegíveis com cálculos de comissão
+        $empresasComComissao = $this->calcularComissoesPorEmpresa($sextaRef, $proximaSexta);
 
         // Busca cobranças para exibir na tela
         $cobrancas = \App\Models\Cobranca::with('empresa')
@@ -264,8 +262,8 @@ class BoletoController extends Controller
 
     private function getSextaDaSemana(Carbon $refDate)
     {
-        // Quinta-feira (4) - sistema funciona quinta a quinta
-        $delta = ($refDate->dayOfWeek - 4) % 7;
+        // Sexta-feira (5) - sistema funciona sexta a sexta
+        $delta = ($refDate->dayOfWeek - 5) % 7;
         if ($delta < 0) $delta += 7;
         return $refDate->copy()->subDays($delta);
     }
@@ -725,6 +723,11 @@ class BoletoController extends Controller
             // Garantir que não exceda 50 caracteres (segurança extra)
             $chargeName = mb_substr($chargeName, 0, 50);
             
+            // Calcular janela atual (mesma lógica do método emitir)
+            $sextaRef = $this->getSextaDaSemana(now());
+            $proximaSexta = $sextaRef->copy()->addDays(7);
+            $dataFim = $proximaSexta->copy()->subDay();
+            
             $dadosPagamento = [
                 'reference_id' => $referenceId,
                 'valor' => $validated['valor'],
@@ -732,7 +735,7 @@ class BoletoController extends Controller
                 'return_url' => route('emitir-boletos'),
                 'expires_at' => now()->addDays(30)->format('Y-m-d'),
                 'charge_name' => $chargeName,
-                'charge_description' => 'Pagamento de comissão referente ao período de 12/12/2025 até 18/12/2025 - ' . $empresaNome,
+                'charge_description' => 'Pagamento de comissão referente ao período de ' . $sextaRef->format('d/m/Y') . ' até ' . $dataFim->format('d/m/Y') . ' - ' . $empresaNome,
                 'payment_methods' => $paymentMethods,
                 'brcode_arrangements' => ['PICPAY', 'PIX'],
                 'allow_create_pix_key' => true,

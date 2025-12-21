@@ -884,8 +884,8 @@
                         }
                         
                         // Montar mensagem com link
-                        const dataInicio = '12/12/2025';
-                        const dataFim = '18/12/2025';
+                        const dataInicio = '{{ $sextaRef->format('d/m/Y') }}';
+                        const dataFim = '{{ $proximaSexta->copy()->subDay()->format('d/m/Y') }}';
                         const valorFormatado = parseFloat(valorComissao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
                         const linkPagamento = data.payment_url;
                         
@@ -903,8 +903,8 @@
                         alert('⚠️ ' + errorMsg + '\n\nVocê pode adicionar o link manualmente no campo "Link de Pagamento".');
                         
                         // Montar mensagem sem link
-                        const dataInicio = '12/12/2025';
-                        const dataFim = '18/12/2025';
+                        const dataInicio = '{{ $sextaRef->format('d/m/Y') }}';
+                        const dataFim = '{{ $proximaSexta->copy()->subDay()->format('d/m/Y') }}';
                         const valorFormatado = parseFloat(valorComissao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
                         
                         let mensagem = `Olá, segue link de acesso ao título referente aos nossos honorários, esses referente ao período de ${dataInicio} até ${dataFim}.\n\n`;
@@ -926,8 +926,8 @@
                     alert('⚠️ ' + errorMsg + '\n\nVocê pode adicionar o link manualmente no campo "Link de Pagamento".');
                     
                     // Montar mensagem sem link
-                    const dataInicio = '12/12/2025';
-                    const dataFim = '18/12/2025';
+                    const dataInicio = '{{ $sextaRef->format('d/m/Y') }}';
+                    const dataFim = '{{ $proximaSexta->copy()->subDay()->format('d/m/Y') }}';
                     const valorFormatado = parseFloat(valorComissao).toLocaleString('pt-BR', {minimumFractionDigits: 2});
                     
                     let mensagem = `Olá, segue link de acesso ao título referente aos nossos honorários, esses referente ao período de ${dataInicio} até ${dataFim}.\n\n`;
