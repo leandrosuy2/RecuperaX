@@ -67,6 +67,12 @@ class PicPayService
                 $token = $data['access_token'] ?? null;
                 $expiresIn = $data['expires_in'] ?? 3600;
 
+                Log::info('Token PicPay obtido com sucesso', [
+                    'has_token' => !empty($token),
+                    'expires_in' => $expiresIn,
+                    'client_id' => substr($this->clientId, 0, 20) . '...',
+                ]);
+
                 if ($token) {
                     // Cache o token por um tempo menor que o expires_in para garantir que não expire
                     Cache::put($cacheKey, $token, now()->addSeconds($expiresIn - 60));
@@ -78,6 +84,7 @@ class PicPayService
                 'status' => $response->status(),
                 'response' => $response->body(),
                 'url' => "{$this->apiUrl}/oauth2/token",
+                'client_id' => substr($this->clientId, 0, 20) . '...',
             ]);
 
             return null;
@@ -175,6 +182,14 @@ class PicPayService
                 'options' => $options,
             ];
 
+            Log::info('Criando payment link no PicPay', [
+                'url' => "{$this->apiUrl}/v1/paymentlink/create",
+                'has_token' => !empty($token),
+                'payload_keys' => array_keys($payload),
+                'charge_name' => $chargeName,
+                'valor_centavos' => $valorCentavos,
+            ]);
+
             $response = $this->httpClient()
                 ->withToken($token)
                 ->withHeaders([
@@ -182,6 +197,12 @@ class PicPayService
                     'Accept' => 'application/json',
                 ])
                 ->post("{$this->apiUrl}/v1/paymentlink/create", $payload);
+
+            Log::info('Resposta do PicPay ao criar payment link', [
+                'status' => $response->status(),
+                'successful' => $response->successful(),
+                'response_body' => $response->body(),
+            ]);
 
             if ($response->successful()) {
                 $data = $response->json();
