@@ -757,9 +757,18 @@ class BoletoController extends Controller
                     'message' => 'Link de pagamento gerado com sucesso!',
                 ]);
             } else {
+                $errorCode = $resultado['error_code'] ?? null;
+                $errorMessage = $resultado['message'] ?? 'Erro ao gerar link de pagamento';
+                
+                // Mensagem mais detalhada para erro de seller não encontrado
+                if ($errorCode === 'B028' || str_contains($errorMessage, 'seller')) {
+                    $errorMessage = 'Seller não cadastrado no PicPay. Verifique se o seller foi cadastrado corretamente no painel do PicPay e se as credenciais (PICPAY_CLIENT_ID e PICPAY_CLIENT_SECRET) no arquivo .env estão corretas.';
+                }
+                
                 return response()->json([
                     'success' => false,
-                    'message' => $resultado['message'] ?? 'Erro ao gerar link de pagamento',
+                    'message' => $errorMessage,
+                    'error_code' => $errorCode,
                 ], 400);
             }
 

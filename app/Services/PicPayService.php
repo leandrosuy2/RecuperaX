@@ -265,15 +265,30 @@ class PicPayService
             }
 
             $error = $response->json();
+            $errorData = $error['error'] ?? $error;
+            
             Log::error('Erro ao criar pagamento PicPay', [
                 'status' => $response->status(),
                 'response' => $error,
+                'error_code' => $errorData['code'] ?? null,
+                'error_type' => $errorData['type'] ?? null,
                 'payload' => $payload,
             ]);
 
+            // Mensagens específicas para erros conhecidos
+            $errorCode = $errorData['code'] ?? null;
+            $errorType = $errorData['type'] ?? null;
+            $errorMessage = $errorData['message'] ?? $error['message'] ?? 'Erro ao criar pagamento';
+            
+            if ($errorCode === 'B028' || ($errorType === 'register' && str_contains($errorMessage, 'seller'))) {
+                $errorMessage = 'Seller não cadastrado no PicPay. Verifique se o seller foi cadastrado corretamente no painel do PicPay e se as credenciais (CLIENT_ID e CLIENT_SECRET) estão corretas.';
+            }
+
             return [
                 'success' => false,
-                'message' => $error['message'] ?? 'Erro ao criar pagamento',
+                'message' => $errorMessage,
+                'error_code' => $errorCode,
+                'error_type' => $errorType,
                 'errors' => $error['errors'] ?? [],
             ];
         } catch (\Exception $e) {
